@@ -1,5 +1,8 @@
 //! The shell: tab strip, sidebar, page content, toast and shortcuts.
 
+mod ai_chat;
+mod ai_settings;
+mod ai_widgets;
 pub mod craft_icons;
 mod file_tab;
 mod home;
@@ -40,11 +43,26 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
             .show(ui, |ui| sidebar(app, ui));
     }
 
+    if app.active > 0
+        && app.ai_pane
+        && let Some(path) = app.tabs.get(app.active - 1).cloned()
+    {
+        egui::Panel::right("ai_pane")
+            .exact_size(400.0)
+            .resizable(false)
+            .frame(egui::Frame::new().fill(pal.canvas).stroke(Stroke::new(1.0, pal.border)))
+            .show(ui, |ui| {
+                ai_pane_header(app, ui);
+                ai_chat::pane(app, ui, &path);
+            });
+    }
+
     egui::CentralPanel::default().frame(egui::Frame::new().fill(pal.canvas)).show(ui, |ui| {
         if app.active == 0 {
             match app.page {
                 Page::Home | Page::Recent | Page::Starred | Page::Folder => home::page(app, ui),
                 Page::CraftApps => pages::craft_apps(app, ui),
+                Page::Ai => ai_chat::page(app, ui),
             }
         } else if let Some(path) = app.tabs.get(app.active - 1).cloned() {
             file_tab::show(app, ui, &path);
@@ -109,6 +127,18 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(2.0);
+            let tip = match app.shortcut_text(&Command::ToggleAiPane) {
+                Some(k) => format!("KaDee AI ({k})"),
+                None => "KaDee AI".to_string(),
+            };
+            let on = app.active > 0 && app.ai_pane;
+            let ai = icon_button(ui, Icon::Sparkles, &tip);
+            if on {
+                ui.painter().rect_stroke(ai.rect, CornerRadius::same(6), Stroke::new(1.0, pal.accent), StrokeKind::Inside);
+            }
+            if ai.clicked() {
+                app.send(if app.active == 0 { Command::ShowPage(Page::Ai) } else { Command::ToggleAiPane });
+            }
             let (icon, tip) = match app.state.settings.theme {
                 ThemePref::System => (Icon::Auto, "Theme: System — click for Light"),
                 ThemePref::Light => (Icon::Sun, "Theme: Light — click for Dark"),
@@ -120,6 +150,24 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
             let _ = pal;
         });
     });
+}
+
+/// The pane's title bar: KaDee AI, and a button that hides it.
+fn ai_pane_header(app: &mut KadeeApp, ui: &mut Ui) {
+    let pal = Palette::of(ui);
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        let (r, _) = ui.allocate_exact_size(Vec2::splat(16.0), Sense::hover());
+        icons::paint(ui.painter(), r, Icon::Sparkles, pal.accent);
+        ui.label(RichText::new("KaDee AI").size(14.0).strong().color(pal.text));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(6.0);
+            if icon_button(ui, Icon::Close, "Hide KaDee AI").clicked() {
+                app.send(Command::ToggleAiPane);
+            }
+        });
+    });
+    ui.separator();
 }
 
 fn new_menu(app: &mut KadeeApp, ui: &mut Ui) {
@@ -238,6 +286,9 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
     }
     if nav_item(ui, Icon::Star, "Starred", Some(starred_n), app.page == Page::Starred) {
         go(app, Page::Starred);
+    }
+    if nav_item(ui, Icon::Sparkles, "KaDee AI", None, app.page == Page::Ai) {
+        go(app, Page::Ai);
     }
     if nav_item(ui, Icon::Grid, "Crafting Apps", Some(CRAFT_APPS.len()), app.page == Page::CraftApps) {
         go(app, Page::CraftApps);

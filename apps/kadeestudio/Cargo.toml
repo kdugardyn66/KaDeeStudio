@@ -8,6 +8,7 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+kadee-ai.workspace = true
 kadee-core.workspace = true
 kadee-ui.workspace = true
 kadee-commands.workspace = true

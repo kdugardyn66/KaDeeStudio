@@ -1,10 +1,22 @@
 # KadeeStudio
 
-A native Rust office suite with AI, Markdown, PDF, conversion, dashboards and reports, and real-time collaboration through a self-hosted server on Docker or Kubernetes. It will also host the Crafting Apps: thirteen ArtCraft apps and SolidCraft.
+A native Rust office suite with KaDee AI, Markdown, PDF, conversion, dashboards and reports, and real-time collaboration through a self-hosted server on Docker or Kubernetes. It will also host the Crafting Apps: thirteen ArtCraft apps and SolidCraft.
 
-**Status — v0.1.0, Phase 0: the start screen.** No editors, no AI, no server yet.
+**Status — v0.2.0, Phase 1: KaDee AI.** The start screen from 0.1.0 now has KaDee AI: chat, an AI pane next to every open file, and your choice of providers and models. No editors and no server yet.
 
 ![KadeeStudio start screen](docs/screenshots/home-light.png)
+
+![KaDee AI](docs/screenshots/kadee-ai.png)
+
+## KaDee AI (new in 0.2.0)
+
+KaDee AI is the assistant in KadeeStudio. It is built the way SolarOffice's AI is: one layer (`crates/kadee-ai`) over many providers, with the settings in `ai.toml` next to `home.json`.
+
+- **Providers**: Anthropic (Claude), Google Gemini, OpenAI, Mistral, DeepSeek, Alibaba Qwen, Moonshot Kimi, Z.AI GLM, Cohere, Meta, Microsoft Foundry, SpaceX AI Grok, Aleph Alpha and Sakana; local **Ollama** and **LM Studio**; any OpenAI-compatible endpoint (vLLM, llama.cpp, OpenRouter, Groq …) and custom providers; DeepL and FLUX are known to the layer for later. Settings › **AI providers** groups them by region, shows *Needs an API key* or *Local · no key needed*, and has **Test connection**.
+- **Models**: Settings › **AI models** sets the default model and one model per part of KadeeStudio (start screen, Markdown, PDF, Dashboards, Reports, Word, spreadsheets, presentations). Prices and limits come from a built-in catalogue; you can add models the catalogue does not list.
+- **Chat**: sidebar › **KaDee AI** (`Cmd+Shift+A`). Answers stream in; **Stop**, **New chat**, a model picker, *General chat* or *For* a module, and an optional *Starred files* context. Each answer shows its tokens and cost.
+- **AI pane**: the ✦ button in the tab strip (`Cmd+J`) opens KaDee AI next to the open file. It knows the file (its text, when it is readable) and uses that module's instructions and model.
+- **Private by default**: nothing is sent anywhere until you add a provider. API keys are stored in `ai.toml` in plain text, readable by you only, or read from the provider's usual environment variable (`ANTHROPIC_API_KEY` …). AI changes in Settings are kept when you click Done and dropped on Cancel.
 
 ## The start screen
 
@@ -114,7 +126,7 @@ Needs Rust with the MSVC toolchain and Visual Studio Build Tools (C++ workload).
 
 ### Without your own machines
 
-The **Release** workflow (`.github/workflows/release.yml`) builds the macOS .dmg (universal), the Linux .tar.gz, .deb, .rpm and AppImage, and the Windows .zip and .msi on GitHub's runners. Start it from Actions → Release → Run workflow, or push a tag such as `v0.1.0` to publish a GitHub release.
+The **Release** workflow (`.github/workflows/release.yml`) builds the macOS .dmg (universal), the Linux .tar.gz, .deb, .rpm and AppImage, and the Windows .zip and .msi on GitHub's runners. Start it from Actions → Release → Run workflow, or push a tag such as `v0.2.0` to publish a GitHub release.
 
 ## Layout
 
@@ -126,6 +138,7 @@ apps/kadeestudio/        the desktop app (egui / eframe)
   src/ui/                tab strip + sidebar (mod.rs), home, file table, Crafting Apps page, Settings popup (settings.rs), file tab
   src/mac_menu.rs       macOS menu bar (About opens Settings › About)
   assets/craft-icons/    the Crafting Apps' own icons
+crates/kadee-ai/         KaDee AI: providers, models and prices, streaming requests, chat state (no UI)
 crates/kadee-core/       modules, Crafting Apps catalogue and installed-app detection, file-type registry, Recent/Starred, settings, home.json, file helpers (no UI)
 crates/kadee-ui/         design tokens, light/dark palettes, badges, pills, buttons
 crates/kadee-commands/   every action as a Command with a stable id; key map, chords and sequences, matcher
@@ -140,8 +153,8 @@ Rules: `kadee-core` never depends on egui, and every click or shortcut becomes a
 
 | Phase | Deliverable |
 | --- | --- |
-| 0 | Workspace, shell, start screen (this release) |
-| 1 | Kadee AI: providers and models, Ask AI, an AI pane per tab, tools as commands, MCP server |
+| 0 | Workspace, shell, start screen (0.1.0) |
+| 1 | KaDee AI: providers and models, chat, an AI pane per tab (0.2.0, this release); next: tools as commands, MCP server |
 | 2 | Kadee Markdown — port of mdcraft to a native editor |
 | 3 | Collaboration: Yrs CRDT sync server (Axum, PostgreSQL, NATS, S3), Docker Compose and Helm chart, OIDC |
 | 4 | Kadee PDF |
@@ -153,4 +166,4 @@ The full architecture and implementation plan is in the KadeeStudio plan documen
 
 ## License
 
-MIT OR Apache-2.0. The Crafting App names and icons belong to the ArtCraft team, Tangency Labs and each app's contributors; KadeeStudio lists them and shows their icons, copied unmodified from the ArtCraft launcher (MIT OR Apache-2.0, see `apps/kadeestudio/assets/craft-icons/ATTRIBUTION.md`).
+MIT OR Apache-2.0. KaDee AI is derived from the SolarOffice AI layer (`solar-ai`) by the same author. The Crafting App names and icons belong to the ArtCraft team, Tangency Labs and each app's contributors; KadeeStudio lists them and shows their icons, copied unmodified from the ArtCraft launcher (MIT OR Apache-2.0, see `apps/kadeestudio/assets/craft-icons/ATTRIBUTION.md`).

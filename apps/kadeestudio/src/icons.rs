@@ -22,6 +22,10 @@ pub enum Icon {
     Open,
     Keyboard,
     Info,
+    Sparkles,
+    Send,
+    Stop,
+    Chevron,
 }
 
 /// Paint `icon` centred in `rect`.
@@ -164,6 +168,34 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 .collect();
             line(&pts);
             line(&[at(13.6, 3.2), at(13.4, 6.4), at(10.2, 6.2)]);
+        }
+        Icon::Sparkles => {
+            // A large four-point star and two small ones.
+            let star = |cx: f32, cy: f32, r: f32| {
+                let pts = [
+                    at(cx, cy - r),
+                    at(cx + r * 0.28, cy - r * 0.28),
+                    at(cx + r, cy),
+                    at(cx + r * 0.28, cy + r * 0.28),
+                    at(cx, cy + r),
+                    at(cx - r * 0.28, cy + r * 0.28),
+                    at(cx - r, cy),
+                    at(cx - r * 0.28, cy - r * 0.28),
+                ];
+                p.add(Shape::closed_line(pts.to_vec(), st));
+            };
+            star(6.6, 9.0, 5.0);
+            star(12.4, 4.0, 2.3);
+        }
+        Icon::Send => {
+            p.add(Shape::closed_line(vec![at(2.0, 8.0), at(14.0, 2.5), at(10.0, 13.5), at(7.6, 9.0)], st));
+            line(&[at(7.6, 9.0), at(14.0, 2.5)]);
+        }
+        Icon::Stop => {
+            p.rect_filled(Rect::from_min_max(at(4.0, 4.0), at(12.0, 12.0)), egui::CornerRadius::same((1.4 * u) as u8), color);
+        }
+        Icon::Chevron => {
+            line(&[at(4.0, 6.0), at(8.0, 10.0), at(12.0, 6.0)]);
         }
         Icon::Open => {
             line(&[at(2.0, 12.8), at(2.0, 3.6), at(6.2, 3.6), at(7.6, 5.2), at(12.5, 5.2), at(12.5, 7.0)]);

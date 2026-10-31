@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ai_state;
 mod app;
 mod icons;
 #[cfg(target_os = "macos")]
@@ -27,6 +28,9 @@ impl eframe::App for KadeeApp {
                     mac_menu::Action::Edit(edit) => mac_menu::edit(ui.ctx(), edit),
                 }
             }
+        }
+        if self.pump_ai() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(40));
         }
         ui::shortcuts(self, ui.ctx());
         ui::shell(self, ui);

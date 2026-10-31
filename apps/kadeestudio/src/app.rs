@@ -1,11 +1,13 @@
 //! Application state and the single place where commands run.
 
 use crate::ui::keys::Recording;
+use kadee_ai::{AiHub, ChatState};
 use kadee_commands::{Command, Keymap, Matcher, Os, Page, SettingsSection, display_sequence};
 use kadee_core::{
     DocGroup, DocKind, FileEntry, HomeState, InstalledApp, ModuleKind, Settings, Store, StoredShortcut, all_extensions,
     create_new_document, create_office_document, detect_installed, list_documents, now,
 };
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// The system the app runs on: decides modifier key names and the main shortcut key.
@@ -61,6 +63,14 @@ pub struct KadeeApp {
     pub meta_down: bool,
     /// The Settings window, when open.
     pub settings_window: Option<SettingsWindow>,
+    /// KaDee AI: providers, models and the request machinery (`ai.toml` next to `home.json`).
+    pub ai: AiHub,
+    /// KaDee AI conversations: `""` is the KaDee AI page, a file path is that file's pane.
+    pub chats: HashMap<String, ChatState>,
+    /// The KaDee AI pane beside the open file.
+    pub ai_pane: bool,
+    /// Edits in Settings › AI providers / AI models, applied on Done.
+    pub ai_ui: crate::ai_state::AiSettingsUi,
     /// Crafting Apps found on this computer.
     pub installed: Vec<InstalledApp>,
     /// Crafting App icons, loaded on first use.
@@ -76,6 +86,7 @@ impl KadeeApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let store = Store::platform();
         let (state, first) = store.load_or_init();
+        let ai = AiHub::load(store.dir().to_path_buf());
         let mut app = Self {
             store,
             state,
@@ -98,6 +109,10 @@ impl KadeeApp {
             add_choice: 0,
             meta_down: false,
             settings_window: None,
+            ai,
+            chats: HashMap::new(),
+            ai_pane: false,
+            ai_ui: Default::default(),
             installed: detect_installed(),
             craft_icons: Default::default(),
             #[cfg(target_os = "macos")]
@@ -123,11 +138,14 @@ impl KadeeApp {
                     "settings" | "general" => app.open_settings(SettingsSection::General),
                     "keyboard" | "shortcuts" => app.open_settings(SettingsSection::Keyboard),
                     "about" => app.open_settings(SettingsSection::About),
+                    "ai-providers" | "providers" => app.open_settings(SettingsSection::AiProviders),
+                    "ai-models" | "models" => app.open_settings(SettingsSection::AiModels),
                     _ => {
                         app.page = match name {
                             "recent" => Page::Recent,
                             "starred" => Page::Starred,
                             "craft" => Page::CraftApps,
+                            "ai" => Page::Ai,
                             "folder" => Page::Folder,
                             _ => Page::Home,
                         }
@@ -205,6 +223,14 @@ impl KadeeApp {
     pub fn close_settings(&mut self, keep: bool, ctx: &egui::Context) {
         let Some(w) = self.settings_window.take() else { return };
         self.recording = None;
+        let ai_draft = self.ai_ui.draft.take();
+        self.ai_ui = Default::default();
+        if keep && let Some(draft) = ai_draft {
+            let time = ctx.input(|i| i.time);
+            if let Err(e) = self.ai.set_config(draft) {
+                self.notify(format!("Could not save the AI settings: {e}"), time);
+            }
+        }
         if !keep {
             let folder_changed = w.before.documents_dir != self.state.settings.documents_dir;
             self.state.settings = w.before;
@@ -353,6 +379,7 @@ impl KadeeApp {
                 }
             }
             Command::OpenSettings(section) => self.open_settings(section),
+            Command::ToggleAiPane => self.ai_pane = !self.ai_pane,
             Command::LaunchCraft(id) => match self.installed.iter().find(|i| i.app.id == id) {
                 Some(found) => match found.launch(None) {
                     Ok(()) => self.notify(format!("Opening {}…", found.app.name), time),
@@ -427,4 +454,21 @@ impl KadeeApp {
 
 pub fn file_name(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string())
+}
+
+impl KadeeApp {
+    /// The chat for `key` (`""` = the KaDee AI page, else a file path).
+    pub fn chat(&mut self, key: &str) -> &mut ChatState {
+        self.chats.entry(key.to_string()).or_insert_with(|| ChatState::new(None, key.is_empty()))
+    }
+
+    /// Take in news from running AI requests; true while any is still running.
+    pub fn pump_ai(&mut self) -> bool {
+        let mut running = false;
+        for c in self.chats.values_mut() {
+            c.pump();
+            running |= c.running();
+        }
+        running
+    }
 }

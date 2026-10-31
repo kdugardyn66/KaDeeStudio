@@ -22,6 +22,8 @@ pub enum Page {
     Starred,
     Folder,
     CraftApps,
+    /// The KaDee AI chat.
+    Ai,
 }
 
 /// Sections of the Settings window.
@@ -29,16 +31,28 @@ pub enum Page {
 pub enum SettingsSection {
     General,
     Keyboard,
+    /// KaDee AI: the connected providers and local servers.
+    AiProviders,
+    /// KaDee AI: which model each part of KadeeStudio uses.
+    AiModels,
     About,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 3] = [SettingsSection::General, SettingsSection::Keyboard, SettingsSection::About];
+    pub const ALL: [SettingsSection; 5] = [
+        SettingsSection::General,
+        SettingsSection::Keyboard,
+        SettingsSection::AiProviders,
+        SettingsSection::AiModels,
+        SettingsSection::About,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             SettingsSection::General => "General",
             SettingsSection::Keyboard => "Keyboard",
+            SettingsSection::AiProviders => "AI providers",
+            SettingsSection::AiModels => "AI models",
             SettingsSection::About => "About",
         }
     }
@@ -47,6 +61,8 @@ impl SettingsSection {
         match self {
             SettingsSection::General => "general",
             SettingsSection::Keyboard => "keyboard",
+            SettingsSection::AiProviders => "ai-providers",
+            SettingsSection::AiModels => "ai-models",
             SettingsSection::About => "about",
         }
     }
@@ -71,6 +87,8 @@ pub enum Command {
     ShowPage(Page),
     /// Open the Settings window at a section.
     OpenSettings(SettingsSection),
+    /// Show or hide the KaDee AI pane next to the open file.
+    ToggleAiPane,
     /// Start an installed Crafting App, by its id (`photocraft`).
     LaunchCraft(String),
     /// Activate tab n (0 = Home).
@@ -104,6 +122,7 @@ impl Command {
             Command::OpenPath(_) => "file.open_path".into(),
             Command::ShowPage(p) => format!("home.show.{}", format!("{p:?}").to_lowercase()),
             Command::OpenSettings(s) => format!("settings.open.{}", s.id()),
+            Command::ToggleAiPane => "ai.toggle_pane".into(),
             Command::LaunchCraft(id) => format!("craft.launch.{id}"),
             Command::ActivateTab(n) => format!("tab.go.{}", n + 1),
             Command::NextTab => "tab.next".into(),
@@ -165,9 +184,13 @@ pub fn bindable_commands() -> Vec<(Command, String)> {
         (Command::ShowPage(Page::Recent), "Show Recent".into()),
         (Command::ShowPage(Page::Starred), "Show Starred".into()),
         (Command::ShowPage(Page::CraftApps), "Show Crafting Apps".into()),
+        (Command::ShowPage(Page::Ai), "Show KaDee AI".into()),
+        (Command::ToggleAiPane, "Show or hide the KaDee AI pane".into()),
         (Command::ShowPage(Page::Folder), "Show the KadeeStudio folder".into()),
         (Command::OpenSettings(SettingsSection::General), "Settings".into()),
         (Command::OpenSettings(SettingsSection::Keyboard), "Keyboard shortcuts".into()),
+        (Command::OpenSettings(SettingsSection::AiProviders), "AI providers".into()),
+        (Command::OpenSettings(SettingsSection::AiModels), "AI models".into()),
         (Command::OpenSettings(SettingsSection::About), "About KadeeStudio".into()),
         (Command::CycleTheme, "Switch theme (System, Light, Dark)".into()),
         (Command::SetTheme(ThemePref::Light), "Light theme".into()),
@@ -454,6 +477,8 @@ impl Keymap {
             bindings.push(Binding { command: Command::ActivateTab(n), keys: p(&(n + 1).to_string()) });
         }
         bindings.push(Binding { command: Command::OpenSettings(SettingsSection::General), keys: p("Comma") });
+        bindings.push(Binding { command: Command::ShowPage(Page::Ai), keys: ps("A") });
+        bindings.push(Binding { command: Command::ToggleAiPane, keys: p("J") });
         Keymap { bindings }
     }
 

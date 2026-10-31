@@ -1,16 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["crates/kadee-core", "crates/kadee-ui", "crates/kadee-commands", "apps/kadeestudio"]
+members = ["crates/kadee-ai", "crates/kadee-core", "crates/kadee-ui", "crates/kadee-commands", "apps/kadeestudio"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Kris Dugardyn"]
-repository = "https://github.com/kdugardyn66/kadeestudio"
+repository = "https://github.com/kdugardyn66/KaDeeStudio"
 rust-version = "1.88"
 
 [workspace.dependencies]
+kadee-ai = { path = "crates/kadee-ai" }
 kadee-core = { path = "crates/kadee-core" }
 kadee-ui = { path = "crates/kadee-ui" }
 kadee-commands = { path = "crates/kadee-commands" }

@@ -71,6 +71,8 @@ pub fn window(app: &mut KadeeApp, ui: &Ui) {
                         match section {
                             SettingsSection::General => general(app, ui),
                             SettingsSection::Keyboard => super::pages::shortcuts_editor(app, ui),
+                            SettingsSection::AiProviders => super::ai_settings::providers(app, ui),
+                            SettingsSection::AiModels => super::ai_settings::models(app, ui),
                             SettingsSection::About => about(app, ui),
                         }
                     });
@@ -89,7 +91,11 @@ pub fn window(app: &mut KadeeApp, ui: &Ui) {
                         close = Some(false);
                     }
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.label(RichText::new("Changes are saved when you click Done.").size(13.0).color(pal.text_faint));
+                        ui.label(
+                            RichText::new("Changes, including AI settings, are saved when you click Done.")
+                                .size(13.0)
+                                .color(pal.text_faint),
+                        );
                     });
                 });
             });
@@ -119,6 +125,7 @@ fn section_icon(s: SettingsSection) -> Icon {
     match s {
         SettingsSection::General => Icon::Gear,
         SettingsSection::Keyboard => Icon::Keyboard,
+        SettingsSection::AiProviders | SettingsSection::AiModels => Icon::Sparkles,
         SettingsSection::About => Icon::Info,
     }
 }
@@ -452,6 +459,7 @@ pub fn about(app: &mut KadeeApp, ui: &mut Ui) {
             ui,
             "The Crafting App names and icons belong to the ArtCraft team, Tangency Labs and each app's contributors; the icons are used under MIT OR Apache-2.0.",
         );
+        line(ui, "KaDee AI is derived from the SolarOffice AI layer by the same author (MIT OR Apache-2.0).");
         line(ui, "KadeeStudio is licensed under MIT OR Apache-2.0.");
         ui.add_space(4.0);
         ui.label(RichText::new("© 2026 Kris Dugardyn").color(pal.text_faint));

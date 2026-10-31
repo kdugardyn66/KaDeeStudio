@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — 2026-11-01
+
+Phase 1: KaDee AI.
+
+- **KaDee AI**, ported from SolarOffice's AI layer into a new crate, `kadee-ai`: one API over Anthropic, Gemini, OpenAI, Mistral, DeepSeek, Qwen, Kimi, GLM, Cohere, Meta, Microsoft Foundry, Grok, Aleph Alpha, Sakana, local Ollama and LM Studio, OpenAI-compatible endpoints and custom providers. Streaming, retries on rate limits and overloads, usage and cost per answer, a model catalogue with prices.
+- **KaDee AI page** (sidebar, `Cmd+Shift+A`): streaming chat with Stop, New chat, model picker, *For* a module, and starred files as context.
+- **AI pane** next to every open file (✦ in the tab strip, `Cmd+J`): knows the file and uses the module's instructions and model.
+- **Settings › AI providers** (by region, status chips, Test connection, add, edit and remove providers, custom providers) and **Settings › AI models** (default model, one model per part of KadeeStudio, add your own models). AI changes are saved on Done and dropped on Cancel; they live in `ai.toml` next to `home.json`.
+- New commands with stable ids: `home.show.ai`, `ai.toggle_pane`, `settings.open.ai-providers`, `settings.open.ai-models`.
+- `--page=ai`, `--page=ai-providers` and `--page=ai-models` open them from the command line.
+- If you changed shortcuts in 0.1.0, the new KaDee AI shortcuts are not in your saved key map: add them in Settings › Keyboard (or Reset to defaults).
+
 ## 0.1.0 — 2026-10-31
 
 Phase 0: the start screen.
