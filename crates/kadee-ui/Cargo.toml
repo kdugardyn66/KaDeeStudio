@@ -1,0 +1,12 @@
+[package]
+name = "kadee-ui"
+description = "KadeeStudio design tokens, themes and shared egui widgets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kadee-core.workspace = true
+egui.workspace = true

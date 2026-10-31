@@ -1,0 +1,25 @@
+[package]
+name = "kadeestudio"
+description = "KadeeStudio office suite — desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kadee-core.workspace = true
+kadee-ui.workspace = true
+kadee-commands.workspace = true
+eframe.workspace = true
+egui.workspace = true
+chrono.workspace = true
+rfd.workspace = true
+open.workspace = true
+
+[features]
+default = []
+# Use the OpenGL (glow) renderer instead of wgpu — for old GPUs and headless CI.
+glow = ["eframe/glow"]
+# Write a PNG of the first frames to $EFRAME_SCREENSHOT_TO and exit (docs, CI).
+screenshot = ["glow", "eframe/__screenshot"]

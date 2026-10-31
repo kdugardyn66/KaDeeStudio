@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = ["crates/kadee-core", "crates/kadee-ui", "crates/kadee-commands", "apps/kadeestudio"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["Kris Dugardyn"]
+repository = "https://github.com/kdugardyn66/kadeestudio"
+rust-version = "1.88"
+
+[workspace.dependencies]
+kadee-core = { path = "crates/kadee-core" }
+kadee-ui = { path = "crates/kadee-ui" }
+kadee-commands = { path = "crates/kadee-commands" }
+eframe = "0.37"
+egui = "0.37"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rfd = "0.17"
+open = "5"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

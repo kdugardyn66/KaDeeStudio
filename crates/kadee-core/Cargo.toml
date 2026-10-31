@@ -1,0 +1,16 @@
+[package]
+name = "kadee-core"
+description = "KadeeStudio core: module catalogue, document library, settings and persistence (no UI)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+directories.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
