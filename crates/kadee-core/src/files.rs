@@ -1,5 +1,6 @@
 //! Document listing, creation and display helpers.
 
+use crate::doctype::DocKind;
 use crate::modules::ModuleKind;
 use std::fs;
 use std::io;
@@ -11,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct FileEntry {
     pub path: PathBuf,
     pub name: String,
-    pub kind: ModuleKind,
+    pub kind: DocKind,
     pub size: u64,
     /// Unix seconds; 0 when unknown.
     pub modified: u64,
@@ -22,7 +23,7 @@ pub struct FileEntry {
 impl FileEntry {
     /// Read metadata for `path`; `None` if no module owns the file type.
     pub fn from_path(path: &Path) -> Option<FileEntry> {
-        let kind = ModuleKind::from_path(path)?;
+        let kind = DocKind::from_path(path)?;
         let name = path.file_name()?.to_string_lossy().into_owned();
         let meta = fs::metadata(path).ok();
         let modified = meta.as_ref().and_then(|m| m.modified().ok()).map(unix).unwrap_or(0);
@@ -134,10 +135,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(tmp.path().join("a.md"), "x").unwrap();
         fs::write(tmp.path().join("b.txt"), "x").unwrap();
+        fs::write(tmp.path().join("part.step"), "x").unwrap();
         fs::write(tmp.path().join(".hidden.md"), "x").unwrap();
         fs::write(tmp.path().join("c.kdash"), "{}").unwrap();
         let names: Vec<_> = list_documents(tmp.path()).into_iter().map(|e| e.name).collect();
-        assert_eq!(names.len(), 2);
+        assert_eq!(names.len(), 3);
+        assert!(names.contains(&"part.step".to_string()));
         assert!(names.contains(&"a.md".to_string()));
         assert!(names.contains(&"c.kdash".to_string()));
     }

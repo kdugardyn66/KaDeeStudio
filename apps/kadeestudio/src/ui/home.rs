@@ -6,7 +6,7 @@ use crate::icons::{self, Icon};
 use chrono::{Datelike, Local, Timelike};
 use egui::{Align2, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, Page};
-use kadee_core::{CRAFT_APPS, ModuleKind};
+use kadee_core::{CRAFT_APPS, CRAFT_PHASE, DocGroup, ModuleKind};
 use kadee_ui::{Palette, paint_module_badge, pill};
 
 pub const CONTENT_MAX: f32 = 1120.0;
@@ -88,7 +88,7 @@ fn quick_start(app: &mut KadeeApp, ui: &mut Ui) {
     ui.label(RichText::new("Start something new").size(16.0).strong().color(pal.text));
     ui.add_space(4.0);
     let gap = 14.0;
-    let n = 6usize;
+    let n = ModuleKind::TILES.len() + 1;
     let w = ui.available_width();
     // 6 across when they fit, otherwise 3 (never a lone card on the last row).
     let cols = if w >= 6.0 * 146.0 + 5.0 * gap {
@@ -99,7 +99,7 @@ fn quick_start(app: &mut KadeeApp, ui: &mut Ui) {
         2
     };
     let card_w = (w - gap * (cols as f32 - 1.0)) / cols as f32;
-    let items: Vec<Option<ModuleKind>> = ModuleKind::ALL.iter().copied().map(Some).chain(std::iter::once(None)).collect();
+    let items: Vec<Option<ModuleKind>> = ModuleKind::TILES.iter().copied().map(Some).chain(std::iter::once(None)).collect();
     for row in items.chunks(cols) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
@@ -167,7 +167,7 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
     let pal = Palette::of(ui);
     ui.horizontal(|ui| {
         ui.label(RichText::new("Crafting Apps").size(16.0).strong().color(pal.text));
-        ui.label(RichText::new("from ArtCraft · integrated in Phase 6").size(13.0).color(pal.text_faint));
+        ui.label(RichText::new(format!("ArtCraft and SolidCraft · integrated in Phase {CRAFT_PHASE}")).size(13.0).color(pal.text_faint));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.link("See all").clicked() {
                 app.send(Command::ShowPage(Page::CraftApps));
@@ -177,7 +177,7 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
     ui.add_space(2.0);
     let gap = 10.0;
     let w = ui.available_width();
-    let cols = 5usize;
+    let cols = 6usize;
     let cw = (w - gap * (cols as f32 - 1.0)) / cols as f32;
     for row in CRAFT_APPS.chunks(cols) {
         ui.horizontal(|ui| {
@@ -199,11 +199,15 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
                 p.text(
                     pos2(r.min.x + 44.0, r.min.y + 34.0),
                     Align2::LEFT_CENTER,
-                    app_info.purpose,
+                    super::truncate(app_info.purpose, ((cw - 54.0) / 6.0) as usize),
                     FontId::proportional(11.5),
                     pal.text_faint,
                 );
-                if resp.on_hover_text("Coming in Phase 6").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                if resp
+                    .on_hover_text(format!("{} · from {} · Phase {CRAFT_PHASE}", app_info.purpose, app_info.maker))
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .clicked()
+                {
                     app.send(Command::ShowPage(Page::CraftApps));
                 }
             }
@@ -222,9 +226,9 @@ fn documents(app: &mut KadeeApp, ui: &mut Ui, title: &str) {
         if pill(ui, "All", app.filter.is_none()).clicked() {
             app.filter = None;
         }
-        for kind in ModuleKind::DOCUMENT_TYPES {
-            if pill(ui, kind.short(), app.filter == Some(kind)).clicked() {
-                app.filter = if app.filter == Some(kind) { None } else { Some(kind) };
+        for group in DocGroup::ALL {
+            if pill(ui, group.label(), app.filter == Some(group)).clicked() {
+                app.filter = if app.filter == Some(group) { None } else { Some(group) };
             }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

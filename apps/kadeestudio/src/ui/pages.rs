@@ -4,7 +4,7 @@ use super::home::{content_column, page_title};
 use crate::app::KadeeApp;
 use egui::{Align2, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, default_keymap, describe};
-use kadee_core::{CRAFT_APPS, LAUNCHER_REPO, ThemePref};
+use kadee_core::{CRAFT_APPS, CRAFT_PHASE, LAUNCHER_REPO, SOLIDCRAFT_REPO, ThemePref};
 use kadee_ui::{Palette, pill, primary_button};
 
 pub fn craft_apps(app: &mut KadeeApp, ui: &mut Ui) {
@@ -13,7 +13,10 @@ pub fn craft_apps(app: &mut KadeeApp, ui: &mut Ui) {
         page_title(
             ui,
             "Crafting Apps",
-            "Open-source Rust apps from the ArtCraft team. KadeeStudio will install, open and embed them in Phase 6.",
+            &format!(
+                "Open-source Rust apps from the ArtCraft team, plus SolidCraft from Tangency Labs. \
+                 KadeeStudio will install, open and embed them in Phase {CRAFT_PHASE}; their files already appear under All."
+            ),
         );
         let gap = 14.0;
         let w = ui.available_width();
@@ -23,22 +26,19 @@ pub fn craft_apps(app: &mut KadeeApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
                 for a in row {
-                    let (r, _) = ui.allocate_exact_size(vec2(cw, 84.0), Sense::hover());
+                    let (r, _) = ui.allocate_exact_size(vec2(cw, 96.0), Sense::hover());
                     let p = ui.painter();
                     p.rect(r, CornerRadius::same(10), pal.surface, Stroke::new(1.0, pal.border), StrokeKind::Inside);
                     let icon = Rect::from_min_size(r.min + vec2(16.0, 16.0), Vec2::splat(40.0));
                     p.rect_filled(icon, CornerRadius::same(10), pal.surface_hover);
                     p.text(icon.center(), Align2::CENTER_CENTER, &a.name[..1], FontId::proportional(18.0), pal.text_muted);
-                    p.text(pos2(icon.max.x + 14.0, r.min.y + 26.0), Align2::LEFT_CENTER, a.name, FontId::proportional(15.0), pal.text);
-                    p.text(
-                        pos2(icon.max.x + 14.0, r.min.y + 46.0),
-                        Align2::LEFT_CENTER,
-                        a.purpose,
-                        FontId::proportional(12.5),
-                        pal.text_muted,
-                    );
-                    let chip = "Phase 6";
-                    let g = p.layout_no_wrap(chip.into(), FontId::proportional(11.0), pal.text_muted);
+                    let x = icon.max.x + 14.0;
+                    p.text(pos2(x, r.min.y + 26.0), Align2::LEFT_CENTER, a.name, FontId::proportional(15.0), pal.text);
+                    p.text(pos2(x, r.min.y + 46.0), Align2::LEFT_CENTER, a.purpose, FontId::proportional(12.5), pal.text_muted);
+                    let exts = a.extensions.iter().map(|e| format!(".{e}")).collect::<Vec<_>>().join(" ");
+                    let line = super::truncate(&format!("{} · {exts}", a.maker), ((cw - 90.0) / 6.0) as usize);
+                    p.text(pos2(x, r.min.y + 70.0), Align2::LEFT_CENTER, line, FontId::proportional(11.0), pal.text_faint);
+                    let g = p.layout_no_wrap(format!("Phase {CRAFT_PHASE}"), FontId::proportional(11.0), pal.text_muted);
                     let cr = Rect::from_min_size(pos2(r.max.x - g.size().x - 30.0, r.min.y + 16.0), vec2(g.size().x + 14.0, 20.0));
                     p.rect_filled(cr, CornerRadius::same(10), pal.surface_hover);
                     p.galley(cr.center() - g.size() / 2.0, g, pal.text_muted);
@@ -48,9 +48,13 @@ pub fn craft_apps(app: &mut KadeeApp, ui: &mut Ui) {
         }
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Until then, install them with the ArtCraft launcher.").color(pal.text_muted));
-            if ui.link("craft-launcher on GitHub").clicked() {
+            ui.label(RichText::new("Until then, install them yourself:").color(pal.text_muted));
+            if ui.link("ArtCraft craft-launcher").clicked() {
                 app.send(Command::OpenUrl(LAUNCHER_REPO.into()));
+            }
+            ui.label(RichText::new("·").color(pal.text_faint));
+            if ui.link("SolidCraft").clicked() {
+                app.send(Command::OpenUrl(SOLIDCRAFT_REPO.into()));
             }
         });
     });
@@ -93,7 +97,7 @@ pub fn settings(app: &mut KadeeApp, ui: &mut Ui) {
         group(ui, "Collaboration", |ui| {
             row(ui, "Team server", "Connect to a KadeeStudio server on Docker or Kubernetes.", |ui| {
                 ui.add_enabled(false, egui::Button::new("Connect…"));
-                ui.label(RichText::new("Phase 2").size(12.0).color(pal.text_faint));
+                ui.label(RichText::new("Phase 3").size(12.0).color(pal.text_faint));
             });
         });
 
@@ -122,7 +126,7 @@ pub fn settings(app: &mut KadeeApp, ui: &mut Ui) {
         group(ui, "About", |ui| {
             ui.label(RichText::new(format!("KadeeStudio {}", kadee_core::VERSION)).strong().color(pal.text));
             ui.label(
-                RichText::new("Native Rust office suite: Markdown, PDF, conversion, dashboards and reports. Phase 0: start screen.")
+                RichText::new("Native Rust office suite: AI, Markdown, PDF, conversion, dashboards and reports. Phase 0: start screen.")
                     .color(pal.text_muted),
             );
             ui.add_space(4.0);

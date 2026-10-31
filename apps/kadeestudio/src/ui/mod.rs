@@ -9,8 +9,8 @@ use crate::app::{KadeeApp, file_name};
 use crate::icons::{self, Icon};
 use egui::{Align2, Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, Key, Page, default_keymap};
-use kadee_core::{CRAFT_APPS, ModuleKind, ThemePref};
-use kadee_ui::{Palette, paint_module_badge};
+use kadee_core::{CRAFT_APPS, DocKind, ModuleKind, ThemePref};
+use kadee_ui::{Palette, paint_doc_badge, paint_module_badge};
 
 const TOAST_SECS: f64 = 3.5;
 
@@ -107,7 +107,7 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
         let mut close = None;
         let mut activate = None;
         for (i, path) in app.tabs.iter().enumerate() {
-            let kind = ModuleKind::from_path(path).unwrap_or(ModuleKind::Markdown);
+            let Some(kind) = DocKind::from_path(path) else { continue };
             let (resp, closed) = tab(ui, app.active == i + 1, TabLabel::File(kind, file_name(path)), true);
             if closed {
                 close = Some(i + 1);
@@ -170,7 +170,7 @@ fn new_menu(app: &mut KadeeApp, ui: &mut Ui) {
 
 enum TabLabel {
     Home,
-    File(ModuleKind, String),
+    File(DocKind, String),
 }
 
 /// One tab; returns (tab response, close clicked).
@@ -194,7 +194,7 @@ fn tab(ui: &mut Ui, active: bool, label: TabLabel, closable: bool) -> (egui::Res
     let icon_rect = Rect::from_center_size(pos2(rect.min.x + 20.0, rect.center().y), Vec2::splat(18.0));
     match &label {
         TabLabel::Home => icons::paint(p, icon_rect.shrink(1.0), Icon::Home, if active { pal.accent } else { pal.text_muted }),
-        TabLabel::File(kind, _) => paint_module_badge(ui, icon_rect, *kind),
+        TabLabel::File(kind, _) => paint_doc_badge(ui, icon_rect, kind),
     }
     let color = if active { pal.text } else { pal.text_muted };
     ui.painter().galley(pos2(rect.min.x + 36.0, rect.center().y - galley.size().y / 2.0), galley, color);
@@ -270,7 +270,7 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
         p.text(
             pos2(r.min.x + 28.0, r.min.y + 36.0),
             Align2::LEFT_CENTER,
-            "Team server arrives in Phase 2",
+            "Team server arrives in Phase 3",
             FontId::proportional(11.5),
             pal.text_faint,
         );

@@ -19,8 +19,20 @@ impl ModuleKind {
     pub const ALL: [ModuleKind; 5] =
         [ModuleKind::Markdown, ModuleKind::Pdf, ModuleKind::Convert, ModuleKind::Dashboard, ModuleKind::Report];
 
-    /// Modules that own a document type (shown as filter pills).
-    pub const DOCUMENT_TYPES: [ModuleKind; 4] = [ModuleKind::Markdown, ModuleKind::Pdf, ModuleKind::Dashboard, ModuleKind::Report];
+    /// Modules with a quick-start tile on the start screen (Convert has none:
+    /// it is reached from File › Convert, the right-click menu and the AI).
+    pub const TILES: [ModuleKind; 4] = [ModuleKind::Markdown, ModuleKind::Pdf, ModuleKind::Dashboard, ModuleKind::Report];
+
+    /// Extensions owned by KadeeStudio's own modules.
+    pub const EXTENSIONS: [(&'static str, ModuleKind); 7] = [
+        ("md", ModuleKind::Markdown),
+        ("markdown", ModuleKind::Markdown),
+        ("mdd", ModuleKind::Markdown),
+        ("mds", ModuleKind::Markdown),
+        ("pdf", ModuleKind::Pdf),
+        ("kdash", ModuleKind::Dashboard),
+        ("kreport", ModuleKind::Report),
+    ];
 
     /// Product name.
     pub fn name(self) -> &'static str {
@@ -69,10 +81,10 @@ impl ModuleKind {
     /// Roadmap phase in which the editor ships.
     pub fn phase(self) -> u8 {
         match self {
-            ModuleKind::Markdown => 1,
-            ModuleKind::Pdf => 3,
-            ModuleKind::Convert => 4,
-            ModuleKind::Dashboard | ModuleKind::Report => 5,
+            ModuleKind::Markdown => 2,
+            ModuleKind::Pdf => 4,
+            ModuleKind::Convert => 5,
+            ModuleKind::Dashboard | ModuleKind::Report => 6,
         }
     }
 
@@ -114,13 +126,23 @@ impl ModuleKind {
 
     /// The module that owns a file, judged by extension.
     pub fn from_path(path: &Path) -> Option<ModuleKind> {
-        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
-        match ext.as_str() {
-            "md" | "markdown" | "mdd" | "mds" => Some(ModuleKind::Markdown),
-            "pdf" => Some(ModuleKind::Pdf),
-            "kdash" => Some(ModuleKind::Dashboard),
-            "kreport" => Some(ModuleKind::Report),
-            _ => None,
+        Self::from_extension(&path.extension()?.to_str()?.to_ascii_lowercase())
+    }
+
+    /// The module that owns a lower-case extension.
+    pub fn from_extension(ext: &str) -> Option<ModuleKind> {
+        Self::EXTENSIONS.iter().find(|(e, _)| *e == ext).map(|(_, m)| *m)
+    }
+
+    /// Start-screen filter group of this module's documents (Convert has none).
+    pub fn group(self) -> Option<crate::doctype::DocGroup> {
+        use crate::doctype::DocGroup;
+        match self {
+            ModuleKind::Markdown => Some(DocGroup::Markdown),
+            ModuleKind::Pdf => Some(DocGroup::Pdf),
+            ModuleKind::Dashboard => Some(DocGroup::Dashboard),
+            ModuleKind::Report => Some(DocGroup::Report),
+            ModuleKind::Convert => None,
         }
     }
 }

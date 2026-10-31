@@ -1,7 +1,7 @@
 //! Application state and the single place where commands run.
 
 use kadee_commands::{Command, Page};
-use kadee_core::{FileEntry, HomeState, ModuleKind, Store, create_new_document, list_documents, now};
+use kadee_core::{DocGroup, DocKind, FileEntry, HomeState, ModuleKind, Store, all_extensions, create_new_document, list_documents, now};
 use std::path::{Path, PathBuf};
 
 /// Columns the file list can be sorted by.
@@ -23,7 +23,8 @@ pub struct KadeeApp {
     pub active: usize,
     pub closed: Vec<PathBuf>,
     pub page: Page,
-    pub filter: Option<ModuleKind>,
+    /// Selected filter pill; `None` = All (every type, Crafting Apps included).
+    pub filter: Option<DocGroup>,
     pub search: String,
     pub sort: SortKey,
     pub sort_desc: bool,
@@ -61,7 +62,7 @@ impl KadeeApp {
         // `kadeestudio file.md other.pdf` opens those files in tabs.
         for arg in std::env::args_os().skip(1) {
             let path = PathBuf::from(arg);
-            if path.is_file() && ModuleKind::from_path(&path).is_some() {
+            if path.is_file() && DocKind::from_path(&path).is_some() {
                 let path = path.canonicalize().unwrap_or(path);
                 app.open_tab(path);
             }
@@ -125,8 +126,8 @@ impl KadeeApp {
                 v
             }
         };
-        if let Some(kind) = self.filter {
-            entries.retain(|e| e.kind == kind);
+        if let Some(group) = self.filter {
+            entries.retain(|e| e.kind.group == group);
         }
         let q = self.search.trim().to_lowercase();
         if !q.is_empty() {
@@ -200,13 +201,13 @@ impl KadeeApp {
             Command::OpenDialog => {
                 let dialog = rfd::FileDialog::new()
                     .set_directory(&self.state.settings.documents_dir)
-                    .add_filter("KadeeStudio documents", &["md", "markdown", "pdf", "kdash", "kreport"]);
+                    .add_filter("All supported documents", &all_extensions());
                 if let Some(path) = dialog.pick_file() {
                     self.send(Command::OpenPath(path));
                 }
             }
             Command::OpenPath(path) => {
-                if ModuleKind::from_path(&path).is_some() {
+                if DocKind::from_path(&path).is_some() {
                     self.open_tab(path);
                 } else {
                     self.notify("KadeeStudio cannot open this file type yet", time);

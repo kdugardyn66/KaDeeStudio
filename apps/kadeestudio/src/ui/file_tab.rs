@@ -4,13 +4,13 @@ use super::home::content_column;
 use crate::app::{KadeeApp, file_name};
 use egui::{CornerRadius, RichText, Stroke, Ui, Vec2};
 use kadee_commands::Command;
-use kadee_core::{FileEntry, ModuleKind, human_size};
-use kadee_ui::{Palette, module_badge, primary_button};
+use kadee_core::{DocKind, FileEntry, human_size};
+use kadee_ui::{Palette, doc_badge, primary_button};
 use std::path::Path;
 
 pub fn show(app: &mut KadeeApp, ui: &mut Ui, path: &Path) {
     let entry = FileEntry::from_path(path);
-    let kind = ModuleKind::from_path(path).unwrap_or(ModuleKind::Markdown);
+    let Some(kind) = DocKind::from_path(path) else { return };
     content_column(ui, |ui| {
         let pal = Palette::of(ui);
         ui.add_space(30.0);
@@ -22,7 +22,7 @@ pub fn show(app: &mut KadeeApp, ui: &mut Ui, path: &Path) {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    module_badge(ui, kind, 64.0);
+                    doc_badge(ui, &kind, 64.0);
                     ui.add_space(8.0);
                     ui.vertical(|ui| {
                         ui.label(RichText::new(file_name(path)).size(24.0).strong().color(pal.text));
@@ -39,7 +39,8 @@ pub fn show(app: &mut KadeeApp, ui: &mut Ui, path: &Path) {
                         "—".into()
                     };
                     egui::Grid::new("facts").num_columns(2).spacing([28.0, 8.0]).show(ui, |ui| {
-                        fact(ui, "Type", kind.name());
+                        fact(ui, "Type", kind.group.label());
+                        fact(ui, "Opens in", kind.app_name());
                         fact(ui, "Size", &if e.exists { human_size(e.size) } else { "File not found".into() });
                         fact(ui, "Modified", &modified);
                     });
@@ -64,7 +65,12 @@ pub fn show(app: &mut KadeeApp, ui: &mut Ui, path: &Path) {
             |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
-                ui.label(RichText::new(format!("The {} editor arrives in Phase {}.", kind.name(), kind.phase())).strong().color(pal.text));
+                let msg = if kind.is_craft() {
+                    format!("KadeeStudio hands {} files to {} from Phase {}.", kind.group.label(), kind.app_name(), kind.phase())
+                } else {
+                    format!("The {} editor arrives in Phase {}.", kind.app_name(), kind.phase())
+                };
+                ui.label(RichText::new(msg).strong().color(pal.text));
                 ui.label(RichText::new("This tab will host it. Until then, open the file in your default app.").color(pal.text_muted));
             },
         );

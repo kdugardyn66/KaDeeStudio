@@ -4,7 +4,7 @@
 //! so light and dark stay consistent.
 
 use egui::{Color32, CornerRadius, FontId, Rect, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, Visuals, epaint::Shadow};
-use kadee_core::{ModuleKind, ThemePref};
+use kadee_core::{DocGroup, DocKind, ModuleKind, ThemePref};
 
 /// Design tokens for one theme.
 #[derive(Debug, Clone, Copy)]
@@ -87,6 +87,22 @@ impl Palette {
     /// The module colour mixed into the surface, for soft badge backgrounds.
     pub fn module_soft(&self, kind: ModuleKind) -> Color32 {
         mix(self.surface, self.module(kind), if self.dark { 0.22 } else { 0.12 })
+    }
+
+    /// Colour of a start-screen document group.
+    pub fn group(&self, group: DocGroup) -> Color32 {
+        let (l, d) = match group {
+            DocGroup::Markdown => return self.module(ModuleKind::Markdown),
+            DocGroup::Pdf => return self.module(ModuleKind::Pdf),
+            DocGroup::Dashboard => return self.module(ModuleKind::Dashboard),
+            DocGroup::Report => return self.module(ModuleKind::Report),
+            DocGroup::Office => ((0x2B, 0x6C, 0x8F), (0x5F, 0xB0, 0xD8)),
+            DocGroup::Graphics => ((0xB0, 0x3A, 0x7A), (0xE8, 0x7C, 0xB6)),
+            DocGroup::Media => ((0x7A, 0x4C, 0xC9), (0xA9, 0x86, 0xF0)),
+            DocGroup::Cad => ((0x4F, 0x6B, 0x2E), (0x9B, 0xC2, 0x6A)),
+        };
+        let (r, g, b) = if self.dark { d } else { l };
+        Color32::from_rgb(r, g, b)
     }
 
     /// egui visuals built from this palette.
@@ -182,6 +198,25 @@ pub fn paint_module_badge(ui: &Ui, rect: Rect, kind: ModuleKind) {
     p.rect_filled(rect, CornerRadius::same((rect.height() * 0.24) as u8), pal.module_soft(kind));
     let font = FontId::proportional((rect.height() * 0.34).max(9.0));
     p.text(rect.center(), egui::Align2::CENTER_CENTER, kind.badge(), font, pal.module(kind));
+}
+
+/// Paint the badge of any document type into `rect`, coloured by its group.
+pub fn paint_doc_badge(ui: &Ui, rect: Rect, kind: &DocKind) {
+    let pal = Palette::of(ui);
+    let color = pal.group(kind.group);
+    let soft = mix(pal.surface, color, if pal.dark { 0.22 } else { 0.12 });
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same((rect.height() * 0.24) as u8), soft);
+    let scale = if kind.badge().len() > 2 { 0.31 } else { 0.34 };
+    let font = FontId::proportional((rect.height() * scale).max(8.5));
+    p.text(rect.center(), egui::Align2::CENTER_CENTER, kind.badge(), font, color);
+}
+
+/// A document badge widget.
+pub fn doc_badge(ui: &mut Ui, kind: &DocKind, size: f32) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    paint_doc_badge(ui, rect, kind);
+    resp
 }
 
 /// A rounded "pill" toggle used for type filters.

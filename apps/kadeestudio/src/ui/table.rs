@@ -5,7 +5,7 @@ use crate::icons::{self, Icon};
 use egui::{Align2, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, Page};
 use kadee_core::{FileEntry, human_size, now, relative_time};
-use kadee_ui::{Palette, paint_module_badge};
+use kadee_ui::{Palette, paint_doc_badge};
 
 const ROW_H: f32 = 44.0;
 
@@ -100,7 +100,7 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         p.rect_filled(rect.shrink2(vec2(0.0, 2.0)), CornerRadius::same(7), pal.surface_hover);
     }
     let badge = Rect::from_center_size(pos2(c.name + 14.0, rect.center().y), Vec2::splat(28.0));
-    paint_module_badge(ui, badge, e.kind);
+    paint_doc_badge(ui, badge, &e.kind);
     let p = ui.painter();
     let name_color = if e.exists { pal.text } else { pal.text_faint };
     let max_name_w = c.opened - c.name - 60.0;
@@ -111,7 +111,7 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         name
     };
     let folder = e.path.parent().and_then(|d| d.file_name()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let sub = if e.exists { format!("{} · {folder}", e.kind.short()) } else { "File not found".into() };
+    let sub = if e.exists { format!("{} · {folder}", e.kind.app_name()) } else { "File not found".into() };
     p.galley(pos2(c.name + 40.0, rect.center().y - 17.0), name, name_color);
     p.text(
         pos2(c.name + 40.0, rect.center().y + 9.0),
