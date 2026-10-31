@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=KadeeStudio
+GenericName=Office Suite
+Comment=AI, Markdown, PDF, dashboards and reports in one native app
+Exec=kadeestudio %F
+Icon=be.kadee.KadeeStudio
+Terminal=false
+Categories=Office;WordProcessor;
+Keywords=markdown;pdf;dashboard;report;office;
+MimeType=text/markdown;application/pdf;
+StartupWMClass=be.kadee.KadeeStudio

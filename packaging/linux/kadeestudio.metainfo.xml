@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>be.kadee.KadeeStudio</id>
+  <name>KadeeStudio</name>
+  <summary>Native Rust office suite</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <developer id="be.kadee">
+    <name>Kris Dugardyn</name>
+  </developer>
+  <description>
+    <p>KadeeStudio brings AI, Markdown, PDF, conversion, dashboards and reports together in one native app,
+    with real-time collaboration through a self-hosted server on Docker or Kubernetes.</p>
+  </description>
+  <launchable type="desktop-id">be.kadee.KadeeStudio.desktop</launchable>
+  <url type="homepage">https://github.com/kdugardyn66/kadeestudio</url>
+  <categories>
+    <category>Office</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

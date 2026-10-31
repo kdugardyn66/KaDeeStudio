@@ -43,11 +43,60 @@ cargo test --workspace
 cargo clippy --workspace --all-targets
 ```
 
-Linux needs the usual windowing libraries (`libxkbcommon`, `libwayland`, X11 or Wayland, a Vulkan or OpenGL driver). A screenshot of the first frame for docs or CI:
+A screenshot of the first frame for docs or CI:
 
 ```sh
 EFRAME_SCREENSHOT_TO=home.png cargo run -p kadeestudio --features screenshot
 ```
+
+## Build installers
+
+`./build.sh` picks the script for the OS you are on; everything lands in `dist/`.
+
+### macOS (`scripts/build-macos.sh`)
+
+Needs Rust and the Xcode command line tools (`xcode-select --install`).
+
+```sh
+./scripts/build-macos.sh               # this Mac's architecture → dist/KadeeStudio.app + .dmg
+./scripts/build-macos.sh --run         # build the .app and open it
+./scripts/build-macos.sh --universal   # Apple silicon + Intel in one binary
+./scripts/build-macos.sh --no-dmg      # .app only
+```
+
+- The .app gets an Info.plist (bundle id `be.kadee.KadeeStudio`, macOS 11 or newer) and the icon from `assets/app-icon`.
+- The .dmg is made with `diskutil image` on macOS 26 and newer, where hdiutil is deprecated, and with hdiutil on older systems (the same flow as mdcraft). Finder lays out the window with the background from `packaging/macos`; allow Terminal to control Finder when macOS asks, or use `DMG_LAYOUT=0` for a plain .dmg.
+- Without a certificate the app is ad-hoc signed: it runs on the Mac that built it. To distribute, sign and notarize:
+
+```sh
+xcrun notarytool store-credentials kadee-notary --apple-id you@example.com --team-id TEAMID
+APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+APPLE_NOTARY_PROFILE=kadee-notary ./scripts/build-macos.sh --universal
+```
+
+### Linux (`scripts/build-linux.sh`)
+
+```sh
+sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
+  libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev     # Debian / Ubuntu
+./scripts/build-linux.sh               # .tar.gz with install.sh, plus .deb / .rpm / AppImage
+```
+
+A .deb is made when `dpkg-deb` is present, an .rpm when `rpmbuild` is, an AppImage when `appimagetool` is. Fedora packages are in the script's header.
+
+### Windows (`scripts/build-windows.ps1`)
+
+Needs Rust with the MSVC toolchain and Visual Studio Build Tools (C++ workload).
+
+```powershell
+.\scripts\build-windows.ps1              # x64 → portable .zip
+.\scripts\build-windows.ps1 -Msi         # also an .msi (dotnet tool install --global wix)
+.\scripts\build-windows.ps1 -Arch arm64
+```
+
+### Without your own machines
+
+The **Release** workflow (`.github/workflows/release.yml`) builds the macOS .dmg (universal), the Linux .tar.gz, .deb, .rpm and AppImage, and the Windows .zip and .msi on GitHub's runners. Start it from Actions → Release → Run workflow, or push a tag such as `v0.1.0` to publish a GitHub release.
 
 ## Layout
 
@@ -60,6 +109,9 @@ apps/kadeestudio/        the desktop app (egui / eframe)
 crates/kadee-core/       modules, Crafting Apps catalogue, file-type registry, Recent/Starred, settings, home.json, file helpers (no UI)
 crates/kadee-ui/         design tokens, light/dark palettes, badges, pills, buttons
 crates/kadee-commands/   every action as a Command with a stable id; the key map
+scripts/                 build-macos.sh, build-linux.sh, build-windows.ps1
+packaging/               macOS dmg background, Linux .desktop + AppStream, Windows MSI (WiX)
+assets/app-icon/         icon as PNG, .icns and .ico
 ```
 
 Rules: `kadee-core` never depends on egui, and every click or shortcut becomes a `Command` that runs in one place (`app.rs`). This keeps the door open for a command palette, CLI, MCP and AI later.

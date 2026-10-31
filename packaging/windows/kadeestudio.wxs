@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  KadeeStudio MSI (WiX v4+). Built by scripts/build-windows.ps1 -Msi with:
+    wix build -arch x64 -d Version=… -d Exe=… -d Icon=… -d License=… -o KadeeStudio.msi kadeestudio.wxs
+  Keep UpgradeCode fixed forever: it is how Windows recognises an upgrade.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="KadeeStudio"
+           Manufacturer="Kris Dugardyn"
+           Version="$(var.Version)"
+           UpgradeCode="6F3C2A8E-4B1D-4E7A-9C52-2D8B7E1F0A64"
+           Scope="perMachine"
+           Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of KadeeStudio is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/kdugardyn66/kadeestudio" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.License)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="KadeeStudio">
+        <Component Id="MainExecutable">
+          <File Id="KadeeStudioExe" Source="$(var.Exe)" Name="KadeeStudio.exe" KeyPath="yes">
+            <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="KadeeStudio"
+                      Description="AI, Markdown, PDF, dashboards and reports"
+                      WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" Advertise="yes" />
+          </File>
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="KadeeStudio">
+      <ComponentRef Id="MainExecutable" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_Minimal" />
+  </Package>
+</Wix>
