@@ -6,7 +6,7 @@ use crate::icons::{self, Icon};
 use chrono::{Datelike, Local, Timelike};
 use egui::{Align2, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, Page};
-use kadee_core::{CRAFT_APPS, CRAFT_PHASE, DocGroup, ModuleKind};
+use kadee_core::{CRAFT_APPS, DocGroup, ModuleKind};
 use kadee_ui::{Palette, paint_module_badge, pill};
 
 pub const CONTENT_MAX: f32 = 1120.0;
@@ -165,9 +165,15 @@ fn card(ui: &mut Ui, kind: Option<ModuleKind>, w: f32) -> Option<Command> {
 
 fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
     let pal = Palette::of(ui);
+    let n = app.installed.len();
     ui.horizontal(|ui| {
         ui.label(RichText::new("Crafting Apps").size(16.0).strong().color(pal.text));
-        ui.label(RichText::new(format!("ArtCraft and SolidCraft · integrated in Phase {CRAFT_PHASE}")).size(13.0).color(pal.text_faint));
+        let sub = if n == 0 {
+            "None installed yet · get them with the ArtCraft launcher".to_string()
+        } else {
+            format!("{n} of {} installed on this computer", CRAFT_APPS.len())
+        };
+        ui.label(RichText::new(sub).size(13.0).color(pal.text_faint));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.link("See all").clicked() {
                 app.send(Command::ShowPage(Page::CraftApps));
@@ -175,40 +181,43 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
         });
     });
     ui.add_space(2.0);
+    let installed = app.installed.clone();
+    if installed.is_empty() {
+        ui.label(RichText::new("Installed Crafting Apps appear here with their icons; click one to open it.").color(pal.text_muted));
+        return;
+    }
     let gap = 10.0;
-    let w = ui.available_width();
-    let cols = 6usize;
-    let cw = (w - gap * (cols as f32 - 1.0)) / cols as f32;
-    for row in CRAFT_APPS.chunks(cols) {
+    let cols = 7usize;
+    let cw = (ui.available_width() - gap * (cols as f32 - 1.0)) / cols as f32;
+    for row in installed.chunks(cols) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
-            for app_info in row {
-                let (r, resp) = ui.allocate_exact_size(vec2(cw, 50.0), Sense::click());
-                let p = ui.painter();
-                p.rect(
+            for found in row {
+                let (r, resp) = ui.allocate_exact_size(vec2(cw, 58.0), Sense::click());
+                ui.painter().rect(
                     r,
                     CornerRadius::same(8),
                     if resp.hovered() { pal.surface_hover } else { pal.surface },
-                    Stroke::new(1.0, pal.border),
+                    Stroke::new(1.0, if resp.hovered() { pal.accent } else { pal.border }),
                     StrokeKind::Inside,
                 );
-                let dot = Rect::from_center_size(pos2(r.min.x + 22.0, r.center().y), Vec2::splat(26.0));
-                p.rect_filled(dot, CornerRadius::same(7), pal.surface_hover);
-                p.text(dot.center(), Align2::CENTER_CENTER, &app_info.name[..1], FontId::proportional(13.0), pal.text_muted);
-                p.text(pos2(r.min.x + 44.0, r.min.y + 17.0), Align2::LEFT_CENTER, app_info.name, FontId::proportional(13.5), pal.text);
+                let icon = Rect::from_center_size(pos2(r.min.x + 29.0, r.center().y), Vec2::splat(38.0));
+                app.craft_icons.paint(ui, icon, found.app, false);
+                let p = ui.painter();
+                p.text(pos2(r.min.x + 56.0, r.min.y + 21.0), Align2::LEFT_CENTER, found.app.name, FontId::proportional(13.5), pal.text);
                 p.text(
-                    pos2(r.min.x + 44.0, r.min.y + 34.0),
+                    pos2(r.min.x + 56.0, r.min.y + 39.0),
                     Align2::LEFT_CENTER,
-                    super::truncate(app_info.purpose, ((cw - 54.0) / 6.0) as usize),
+                    super::truncate(found.app.purpose, ((cw - 64.0) / 6.0) as usize),
                     FontId::proportional(11.5),
                     pal.text_faint,
                 );
                 if resp
-                    .on_hover_text(format!("{} · from {} · Phase {CRAFT_PHASE}", app_info.purpose, app_info.maker))
+                    .on_hover_text(format!("Open {} · {} · {}", found.app.name, found.app.purpose, found.location()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .clicked()
                 {
-                    app.send(Command::ShowPage(Page::CraftApps));
+                    app.send(Command::LaunchCraft(found.app.id.to_string()));
                 }
             }
         });

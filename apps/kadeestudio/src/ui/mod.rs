@@ -1,54 +1,25 @@
 //! The shell: tab strip, sidebar, page content, toast and shortcuts.
 
+pub mod craft_icons;
 mod file_tab;
 mod home;
+pub mod keys;
 mod pages;
+mod settings;
 mod table;
 
 use crate::app::{KadeeApp, file_name};
 use crate::icons::{self, Icon};
 use egui::{Align2, Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
-use kadee_commands::{Command, Key, Page, default_keymap};
+use kadee_commands::{Command, Page};
 use kadee_core::{CRAFT_APPS, DocKind, ModuleKind, ThemePref};
 use kadee_ui::{Palette, paint_doc_badge, paint_module_badge};
 
 const TOAST_SECS: f64 = 3.5;
 
-/// Keyboard shortcuts → commands.
+/// Keyboard shortcuts → commands (see `keys`).
 pub fn shortcuts(app: &mut KadeeApp, ctx: &egui::Context) {
-    for (s, cmd, _) in default_keymap() {
-        let key = match s.key {
-            Key::N => egui::Key::N,
-            Key::O => egui::Key::O,
-            Key::T => egui::Key::T,
-            Key::W => egui::Key::W,
-            Key::D => egui::Key::D,
-            Key::R => egui::Key::R,
-            Key::Comma => egui::Key::Comma,
-            Key::Tab => egui::Key::Tab,
-            Key::Num(n) => match n {
-                1 => egui::Key::Num1,
-                2 => egui::Key::Num2,
-                3 => egui::Key::Num3,
-                4 => egui::Key::Num4,
-                5 => egui::Key::Num5,
-                6 => egui::Key::Num6,
-                7 => egui::Key::Num7,
-                8 => egui::Key::Num8,
-                _ => egui::Key::Num9,
-            },
-        };
-        let mut mods = egui::Modifiers::NONE;
-        if s.primary {
-            mods |= egui::Modifiers::COMMAND;
-        }
-        if s.shift {
-            mods |= egui::Modifiers::SHIFT;
-        }
-        if ctx.input_mut(|i| i.consume_shortcut(&egui::KeyboardShortcut::new(mods, key))) {
-            app.send(cmd);
-        }
-    }
+    keys::keyboard(app, ctx);
 }
 
 /// Lay out the whole window.
@@ -74,13 +45,15 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
             match app.page {
                 Page::Home | Page::Recent | Page::Starred | Page::Folder => home::page(app, ui),
                 Page::CraftApps => pages::craft_apps(app, ui),
-                Page::Settings => pages::settings(app, ui),
             }
         } else if let Some(path) = app.tabs.get(app.active - 1).cloned() {
             file_tab::show(app, ui, &path);
         }
     });
 
+    keys::new_document_picker(app, ui);
+    settings::window(app, ui);
+    keys::sequence_hint(app, ui);
     toast(app, ui);
 }
 
@@ -125,7 +98,11 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
         }
 
         // New-file menu
-        let plus = icon_button(ui, Icon::Plus, "New document (Ctrl+N)");
+        let tip = match app.shortcut_text(&Command::NewDocumentPicker) {
+            Some(k) => format!("New document ({k})"),
+            None => "New document".to_string(),
+        };
+        let plus = icon_button(ui, Icon::Plus, &tip);
         egui::Popup::menu(&plus).width(220.0).show(|ui| {
             new_menu(app, ui);
         });
@@ -147,12 +124,30 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
 
 fn new_menu(app: &mut KadeeApp, ui: &mut Ui) {
     ui.set_min_width(210.0);
-    for kind in [ModuleKind::Markdown, ModuleKind::Dashboard, ModuleKind::Report] {
+    for kind in [ModuleKind::Markdown, ModuleKind::Pdf, ModuleKind::Dashboard, ModuleKind::Report] {
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
             paint_module_badge(ui, r, kind);
-            if ui.button(format!("New {}", kind.short().to_lowercase())).clicked() {
+            let label = if kind == ModuleKind::Pdf { "New PDF".to_string() } else { format!("New {}", kind.short().to_lowercase()) };
+            if ui.button(label).clicked() {
                 app.send(Command::NewDocument(kind));
+                ui.close();
+            }
+        });
+    }
+    for kind in kadee_core::OfficeKind::ALL {
+        ui.horizontal(|ui| {
+            let (r, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
+            if let Some(dk) = kadee_core::DocKind::from_path(std::path::Path::new(&format!("x.{}", kind.extension()))) {
+                kadee_ui::paint_doc_badge(ui, r, &dk);
+            }
+            let label = match kind {
+                kadee_core::OfficeKind::Word => "New Word document",
+                kadee_core::OfficeKind::Spreadsheet => "New spreadsheet",
+                kadee_core::OfficeKind::SlideDeck => "New slide deck",
+            };
+            if ui.button(label).clicked() {
+                app.send(Command::NewOffice(kind));
                 ui.close();
             }
         });
@@ -218,9 +213,8 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
     let pal = Palette::of(ui);
     // Brand
     ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::hover());
-        ui.painter().rect_filled(r, CornerRadius::same(8), pal.accent);
-        ui.painter().text(r.center(), Align2::CENTER_CENTER, "K", FontId::proportional(17.0), pal.on_accent);
+        let (r, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
+        kadee_ui::paint_logo(ui, r);
         ui.add_space(2.0);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
@@ -258,8 +252,8 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
 
     // Bottom: collaboration status + settings
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-        if nav_item(ui, Icon::Gear, "Settings", None, app.page == Page::Settings) {
-            go(app, Page::Settings);
+        if nav_item(ui, Icon::Gear, "Settings", None, app.settings_window.is_some()) {
+            app.send(Command::OpenSettings(kadee_commands::SettingsSection::General));
         }
         ui.add_space(4.0);
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::hover());
@@ -305,19 +299,19 @@ fn toast(app: &mut KadeeApp, ui: &mut Ui) {
     }
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     let pal = Palette::of(ui);
-    egui::Area::new(egui::Id::unique("kadee-toast")).anchor(Align2::CENTER_BOTTOM, vec2(0.0, -24.0)).interactable(false).show(
-        ui.ctx(),
-        |ui| {
+    egui::Area::new(egui::Id::unique("kadee-toast"))
+        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, if app.matcher.pending().is_empty() { -24.0 } else { -84.0 }))
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
             egui::Frame::new()
                 .fill(pal.text)
                 .corner_radius(CornerRadius::same(8))
                 .inner_margin(Margin::symmetric(16, 10))
                 .shadow(egui::epaint::Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha(60) })
                 .show(ui, |ui| {
-                    ui.label(RichText::new(msg).color(pal.surface).size(13.5));
+                    ui.add(egui::Label::new(RichText::new(msg).color(pal.surface).size(13.5)).wrap_mode(egui::TextWrapMode::Extend));
                 });
-        },
-    );
+        });
 }
 
 pub fn truncate(s: &str, max: usize) -> String {

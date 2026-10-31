@@ -1,8 +1,15 @@
 //! Application state and the single place where commands run.
 
-use kadee_commands::{Command, Page};
-use kadee_core::{DocGroup, DocKind, FileEntry, HomeState, ModuleKind, Store, all_extensions, create_new_document, list_documents, now};
+use crate::ui::keys::Recording;
+use kadee_commands::{Command, Keymap, Matcher, Os, Page, SettingsSection, display_sequence};
+use kadee_core::{
+    DocGroup, DocKind, FileEntry, HomeState, InstalledApp, ModuleKind, Settings, Store, StoredShortcut, all_extensions,
+    create_new_document, create_office_document, detect_installed, list_documents, now,
+};
 use std::path::{Path, PathBuf};
+
+/// The system the app runs on: decides modifier key names and the main shortcut key.
+pub const OS: Os = Os::current();
 
 /// Columns the file list can be sorted by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +18,13 @@ pub enum SortKey {
     Opened,
     Modified,
     Size,
+}
+
+/// The Settings window while it is open, with what to go back to on Cancel.
+pub struct SettingsWindow {
+    pub section: SettingsSection,
+    before: Settings,
+    before_keymap: Keymap,
 }
 
 /// The whole app.
@@ -32,6 +46,28 @@ pub struct KadeeApp {
     pub docs: Vec<FileEntry>,
     pub toast: Option<(String, f64)>,
     pub queue: Vec<Command>,
+    /// Keyboard shortcuts in use (defaults or the user's own).
+    pub keymap: Keymap,
+    pub matcher: Matcher,
+    /// A shortcut being recorded on the Keyboard shortcuts page.
+    pub recording: Option<Recording>,
+    /// The New document chooser is open.
+    pub new_picker: bool,
+    /// Keys that opened the New document menu (Cmd+N); a letter after them picks the type.
+    pub picker_prefix: Vec<kadee_commands::Chord>,
+    /// Action picked in "Add a shortcut".
+    pub add_choice: usize,
+    /// The Windows/Super key is held (egui does not report it on Windows and Linux).
+    pub meta_down: bool,
+    /// The Settings window, when open.
+    pub settings_window: Option<SettingsWindow>,
+    /// Crafting Apps found on this computer.
+    pub installed: Vec<InstalledApp>,
+    /// Crafting App icons, loaded on first use.
+    pub craft_icons: crate::ui::craft_icons::CraftIcons,
+    /// macOS menu bar (About KadeeStudio, Settings…).
+    #[cfg(target_os = "macos")]
+    pub mac_menu: Option<crate::mac_menu::MacMenu>,
     dirty: bool,
     theme_applied: Option<kadee_core::ThemePref>,
 }
@@ -54,13 +90,51 @@ impl KadeeApp {
             docs: Vec::new(),
             toast: None,
             queue: Vec::new(),
+            keymap: Keymap::defaults(OS),
+            matcher: Matcher::default(),
+            recording: None,
+            new_picker: false,
+            picker_prefix: Vec::new(),
+            add_choice: 0,
+            meta_down: false,
+            settings_window: None,
+            installed: detect_installed(),
+            craft_icons: Default::default(),
+            #[cfg(target_os = "macos")]
+            mac_menu: None,
             dirty: false,
             theme_applied: None,
         };
+        if let Some(saved) = &app.state.settings.shortcuts {
+            app.keymap = Keymap::from_stored(saved.iter().map(|s| (s.command.as_str(), s.keys.as_str())), OS);
+        }
         app.rescan();
         app.apply_theme(&cc.egui_ctx);
-        // `kadeestudio file.md other.pdf` opens those files in tabs.
+        #[cfg(target_os = "macos")]
+        {
+            app.mac_menu = crate::mac_menu::MacMenu::install(&cc.egui_ctx, &app.keymap);
+        }
+        // `kadeestudio file.md other.pdf` opens those files in tabs;
+        // `--page=craft` (recent, starred, craft, folder) opens a page; `--page=settings`
+        // (settings, keyboard, about) opens the Settings window.
         for arg in std::env::args_os().skip(1) {
+            if let Some(name) = arg.to_str().and_then(|a| a.strip_prefix("--page=")) {
+                match name {
+                    "settings" | "general" => app.open_settings(SettingsSection::General),
+                    "keyboard" | "shortcuts" => app.open_settings(SettingsSection::Keyboard),
+                    "about" => app.open_settings(SettingsSection::About),
+                    _ => {
+                        app.page = match name {
+                            "recent" => Page::Recent,
+                            "starred" => Page::Starred,
+                            "craft" => Page::CraftApps,
+                            "folder" => Page::Folder,
+                            _ => Page::Home,
+                        }
+                    }
+                }
+                continue;
+            }
             let path = PathBuf::from(arg);
             if path.is_file() && DocKind::from_path(&path).is_some() {
                 let path = path.canonicalize().unwrap_or(path);
@@ -96,9 +170,61 @@ impl KadeeApp {
         self.queue.push(cmd);
     }
 
-    /// Save `home.json` if anything changed.
+    /// Keep the current key map in the settings (saved with `home.json`).
+    pub fn save_keymap(&mut self) {
+        self.state.settings.shortcuts =
+            Some(self.keymap.to_stored(OS).into_iter().map(|(command, keys)| StoredShortcut { command, keys }).collect());
+        self.mark_dirty();
+    }
+
+    /// Back to the shipped shortcuts.
+    pub fn reset_keymap(&mut self) {
+        self.keymap = Keymap::defaults(OS);
+        self.recording = None;
+        self.state.settings.shortcuts = None;
+        self.mark_dirty();
+    }
+
+    /// The shortcut of a command as people see it (`Cmd+N`), if it has one.
+    pub fn shortcut_text(&self, cmd: &Command) -> Option<String> {
+        self.keymap.keys_for(cmd).map(|k| display_sequence(k, OS))
+    }
+
+    /// Open the Settings window at `section`; remembers the settings for Cancel.
+    pub fn open_settings(&mut self, section: SettingsSection) {
+        match &mut self.settings_window {
+            Some(w) => w.section = section,
+            None => {
+                self.settings_window =
+                    Some(SettingsWindow { section, before: self.state.settings.clone(), before_keymap: self.keymap.clone() })
+            }
+        }
+    }
+
+    /// Close the Settings window: Done keeps the changes, Cancel puts back what was there.
+    pub fn close_settings(&mut self, keep: bool, ctx: &egui::Context) {
+        let Some(w) = self.settings_window.take() else { return };
+        self.recording = None;
+        if !keep {
+            let folder_changed = w.before.documents_dir != self.state.settings.documents_dir;
+            self.state.settings = w.before;
+            self.keymap = w.before_keymap;
+            self.apply_theme(ctx);
+            if folder_changed {
+                self.rescan();
+            }
+        }
+        self.mark_dirty();
+    }
+
+    /// Look for installed Crafting Apps again.
+    pub fn detect_crafts(&mut self) {
+        self.installed = detect_installed();
+    }
+
+    /// Save `home.json` if anything changed (settings wait for Done).
     pub fn persist(&mut self) {
-        if self.dirty {
+        if self.dirty && self.settings_window.is_none() {
             if let Err(e) = self.store.save(&self.state) {
                 eprintln!("KadeeStudio: could not save settings: {e}");
             }
@@ -181,6 +307,19 @@ impl KadeeApp {
 
     fn run(&mut self, cmd: Command, ctx: &egui::Context, time: f64) {
         match cmd {
+            Command::NewDocumentPicker => {
+                self.picker_prefix = self.keymap.keys_for(&Command::NewDocumentPicker).map(<[_]>::to_vec).unwrap_or_default();
+                self.new_picker = true;
+            }
+            Command::NewOffice(kind) => match create_office_document(kind, &self.state.settings.documents_dir) {
+                Ok(path) => {
+                    let name = file_name(&path);
+                    self.open_tab(path);
+                    self.rescan();
+                    self.notify(format!("Created {name}"), time);
+                }
+                Err(e) => self.notify(format!("Could not create the file: {e}"), time),
+            },
             Command::NewDocument(kind) => match create_new_document(kind, &self.state.settings.documents_dir) {
                 Ok(path) => {
                     let name = file_name(&path);
@@ -213,6 +352,14 @@ impl KadeeApp {
                     self.notify("KadeeStudio cannot open this file type yet", time);
                 }
             }
+            Command::OpenSettings(section) => self.open_settings(section),
+            Command::LaunchCraft(id) => match self.installed.iter().find(|i| i.app.id == id) {
+                Some(found) => match found.launch(None) {
+                    Ok(()) => self.notify(format!("Opening {}…", found.app.name), time),
+                    Err(e) => self.notify(format!("Could not open {}: {e}", found.app.name), time),
+                },
+                None => self.notify("That Crafting App is not installed on this computer", time),
+            },
             Command::ShowPage(page) => {
                 self.page = page;
                 self.active = 0;
@@ -271,6 +418,7 @@ impl KadeeApp {
             Command::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
             Command::Refresh => {
                 self.rescan();
+                self.detect_crafts();
                 self.notify("Refreshed", time);
             }
         }

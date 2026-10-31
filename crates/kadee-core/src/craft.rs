@@ -1,5 +1,6 @@
-//! Catalogue of the Crafting Apps that KadeeStudio will host: the ten
-//! ArtCraft apps plus SolidCraft (3D CAD, from Tangency Labs).
+//! Catalogue of the Crafting Apps that KadeeStudio will host: thirteen
+//! ArtCraft apps plus SolidCraft (3D CAD, from Tangency Labs), in
+//! alphabetical order.
 //!
 //! Phase 0 lists them on the start screen and shows their files under
 //! **All**. Phase 7 ([`CRAFT_PHASE`]) adds launching, file hand-off and embedding.
@@ -9,7 +10,14 @@ use crate::doctype::DocGroup;
 /// One Crafting App and the files it opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CraftApp {
+    /// Machine name: binary, package and asset stem (`photocraft`).
+    pub id: &'static str,
     pub name: &'static str,
+    /// Other names its installs may use: the upstream spelling (`CADCraft`) or a
+    /// former name (`PrintCraft`, binary `printcraft`).
+    pub aliases: &'static [&'static str],
+    /// macOS bundle id, Flatpak id and Linux desktop-file id.
+    pub bundle_id: &'static str,
     pub purpose: &'static str,
     /// Who publishes it.
     pub maker: &'static str,
@@ -17,7 +25,7 @@ pub struct CraftApp {
     pub badge: &'static str,
     /// Filter pill its files appear under.
     pub group: DocGroup,
-    /// Lower-case extensions without the dot.
+    /// Lower-case extensions without the dot. Each extension belongs to one app.
     pub extensions: &'static [&'static str],
 }
 
@@ -31,39 +39,38 @@ const ARTCRAFT: &str = "ArtCraft";
 /// Roadmap phase that integrates the Crafting Apps.
 pub const CRAFT_PHASE: u8 = 7;
 
-/// The Crafting Apps known today.
+/// The Crafting Apps known today, alphabetically.
 ///
 /// `designcraft` and `effectcraft` follow VectorCraft's `.vectorcraft`
 /// project-file pattern and still need confirming against those apps.
-pub const CRAFT_APPS: [CraftApp; 11] = [
+pub const CRAFT_APPS: [CraftApp; 14] = [
     CraftApp {
-        name: "WordCraft",
-        purpose: "Word processing",
+        name: "CadCraft",
+        id: "cadcraft",
+        aliases: &["CADCraft"],
+        bundle_id: "ai.storyteller.cadcraft",
+        purpose: "2D and 3D CAD drafting",
         maker: ARTCRAFT,
-        badge: "DOC",
-        group: DocGroup::Office,
-        extensions: &["docx"],
+        badge: "DWG",
+        group: DocGroup::Cad,
+        extensions: &["dwg", "dxf"],
     },
     CraftApp {
-        name: "GridCraft",
-        purpose: "Spreadsheets and data",
+        name: "DeckCraft",
+        id: "deckcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.deckcraft",
+        purpose: "Presentations",
         maker: ARTCRAFT,
-        badge: "XLS",
+        badge: "PPT",
         group: DocGroup::Office,
-        extensions: &["xlsx", "csv"],
-    },
-    CraftApp { name: "DeckCraft", purpose: "Presentations", maker: ARTCRAFT, badge: "PPT", group: DocGroup::Office, extensions: &["pptx"] },
-    // PDF opens in Kadee PDF first; PdfCraft is the alternative.
-    CraftApp {
-        name: "PdfCraft",
-        purpose: "Organise and protect PDFs",
-        maker: ARTCRAFT,
-        badge: "PDF",
-        group: DocGroup::Pdf,
-        extensions: &["pdf"],
+        extensions: &["pptx"],
     },
     CraftApp {
         name: "DesignCraft",
+        id: "designcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.designcraft",
         purpose: "Page layout and publishing",
         maker: ARTCRAFT,
         badge: "DTP",
@@ -71,39 +78,10 @@ pub const CRAFT_APPS: [CraftApp; 11] = [
         extensions: &["designcraft"],
     },
     CraftApp {
-        name: "PhotoCraft",
-        purpose: "Image editing, PSD files",
-        maker: ARTCRAFT,
-        badge: "IMG",
-        group: DocGroup::Graphics,
-        extensions: &["psd", "png", "jpg", "jpeg", "webp", "tif", "tiff"],
-    },
-    CraftApp {
-        name: "VectorCraft",
-        purpose: "Vector illustration",
-        maker: ARTCRAFT,
-        badge: "VEC",
-        group: DocGroup::Graphics,
-        extensions: &["svg", "eps", "dxf", "emf", "wmf", "vectorcraft"],
-    },
-    CraftApp {
-        name: "LightCraft",
-        purpose: "Photo library and raw",
-        maker: ARTCRAFT,
-        badge: "RAW",
-        group: DocGroup::Media,
-        extensions: &["dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2"],
-    },
-    CraftApp {
-        name: "FilmCraft",
-        purpose: "Video editing",
-        maker: ARTCRAFT,
-        badge: "VID",
-        group: DocGroup::Media,
-        extensions: &["mp4", "mov", "mkv", "webm"],
-    },
-    CraftApp {
         name: "EffectCraft",
+        id: "effectcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.effectcraft",
         purpose: "Motion graphics",
         maker: ARTCRAFT,
         badge: "FX",
@@ -111,12 +89,115 @@ pub const CRAFT_APPS: [CraftApp; 11] = [
         extensions: &["effectcraft"],
     },
     CraftApp {
+        name: "FigCraft",
+        id: "figcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.figcraft",
+        purpose: "Interface design and prototyping",
+        maker: ARTCRAFT,
+        badge: "UI",
+        group: DocGroup::Graphics,
+        extensions: &["figcraft", "fig"],
+    },
+    CraftApp {
+        name: "FilmCraft",
+        id: "filmcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.filmcraft",
+        purpose: "Video editing",
+        maker: ARTCRAFT,
+        badge: "VID",
+        group: DocGroup::Media,
+        extensions: &["mp4", "mov", "mkv", "webm"],
+    },
+    CraftApp {
+        name: "GridCraft",
+        id: "gridcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.gridcraft",
+        purpose: "Spreadsheets and data",
+        maker: ARTCRAFT,
+        badge: "XLS",
+        group: DocGroup::Office,
+        extensions: &["xlsx", "csv"],
+    },
+    CraftApp {
+        name: "LightCraft",
+        id: "lightcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.lightcraft",
+        purpose: "Photo library and raw",
+        maker: ARTCRAFT,
+        badge: "RAW",
+        group: DocGroup::Media,
+        extensions: &["dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2"],
+    },
+    // PDF opens in Kadee PDF first; PdfCraft is the alternative.
+    CraftApp {
+        name: "PdfCraft",
+        id: "pdfcraft",
+        aliases: &["PrintCraft"],
+        bundle_id: "ai.storyteller.pdfcraft",
+        purpose: "Organise and protect PDFs",
+        maker: ARTCRAFT,
+        badge: "PDF",
+        group: DocGroup::Pdf,
+        extensions: &["pdf"],
+    },
+    CraftApp {
+        name: "PhotoCraft",
+        id: "photocraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.photocraft",
+        purpose: "Image editing, PSD files",
+        maker: ARTCRAFT,
+        badge: "IMG",
+        group: DocGroup::Graphics,
+        extensions: &["psd", "png", "jpg", "jpeg", "webp", "tif", "tiff"],
+    },
+    CraftApp {
         name: "SolidCraft",
+        id: "solidcraft",
+        aliases: &["SolveCraft"],
+        bundle_id: "io.tangencylabs.solidcraft",
         purpose: "3D CAD and modelling",
         maker: "Tangency Labs",
         badge: "3D",
         group: DocGroup::Cad,
         extensions: &["step", "stp", "iges", "igs", "3mf", "stl", "obj", "gltf", "glb"],
+    },
+    CraftApp {
+        name: "SoundCraft",
+        id: "soundcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.soundcraft",
+        purpose: "Recording, editing and mixing audio",
+        maker: ARTCRAFT,
+        badge: "AUD",
+        group: DocGroup::Media,
+        extensions: &["wav", "aif", "aiff", "flac", "mp3", "ogg", "m4a", "caf", "mid", "midi"],
+    },
+    CraftApp {
+        name: "VectorCraft",
+        id: "vectorcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.vectorcraft",
+        purpose: "Vector illustration",
+        maker: ARTCRAFT,
+        badge: "VEC",
+        group: DocGroup::Graphics,
+        extensions: &["svg", "eps", "emf", "wmf", "vectorcraft"],
+    },
+    CraftApp {
+        name: "WordCraft",
+        id: "wordcraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.wordcraft",
+        purpose: "Word processing",
+        maker: ARTCRAFT,
+        badge: "DOC",
+        group: DocGroup::Office,
+        extensions: &["docx"],
     },
 ];
 
@@ -135,6 +216,20 @@ mod tests {
         assert_eq!(s.name, "SolidCraft");
         assert_eq!(s.group, DocGroup::Cad);
         assert_eq!(craft_for_extension("stl").unwrap().name, "SolidCraft");
+    }
+
+    #[test]
+    fn apps_are_alphabetical_and_include_the_new_ones() {
+        let names: Vec<&str> = CRAFT_APPS.iter().map(|a| a.name).collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        assert_eq!(names, sorted);
+        for n in ["CadCraft", "FigCraft", "SoundCraft"] {
+            assert!(names.contains(&n), "{n} missing");
+        }
+        assert_eq!(craft_for_extension("dwg").unwrap().name, "CadCraft");
+        assert_eq!(craft_for_extension("fig").unwrap().name, "FigCraft");
+        assert_eq!(craft_for_extension("flac").unwrap().name, "SoundCraft");
     }
 
     #[test]

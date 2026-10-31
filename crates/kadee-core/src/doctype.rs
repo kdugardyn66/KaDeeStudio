@@ -22,12 +22,13 @@ pub enum DocGroup {
 }
 
 impl DocGroup {
+    /// In filter-pill order (after "All").
     pub const ALL: [DocGroup; 8] = [
+        DocGroup::Office,
         DocGroup::Markdown,
         DocGroup::Pdf,
         DocGroup::Dashboard,
         DocGroup::Report,
-        DocGroup::Office,
         DocGroup::Graphics,
         DocGroup::Media,
         DocGroup::Cad,
@@ -42,7 +43,7 @@ impl DocGroup {
             DocGroup::Office => "Office",
             DocGroup::Graphics => "Graphics",
             DocGroup::Media => "Media",
-            DocGroup::Cad => "3D",
+            DocGroup::Cad => "CAD",
         }
     }
 }
@@ -131,6 +132,11 @@ mod tests {
         assert_eq!(DocKind::from_path(Path::new("deck.pptx")).unwrap().app_name(), "DeckCraft");
         assert_eq!(DocKind::from_path(Path::new("photo.psd")).unwrap().group, DocGroup::Graphics);
         assert!(DocKind::from_path(Path::new("notes.txt")).is_none());
+    }
+
+    #[test]
+    fn pills_start_with_office_markdown_pdf() {
+        assert_eq!(&DocGroup::ALL[..3], &[DocGroup::Office, DocGroup::Markdown, DocGroup::Pdf]);
     }
 
     #[test]

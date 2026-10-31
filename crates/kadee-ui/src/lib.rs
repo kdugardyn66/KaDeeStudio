@@ -200,6 +200,49 @@ pub fn paint_module_badge(ui: &Ui, rect: Rect, kind: ModuleKind) {
     p.text(rect.center(), egui::Align2::CENTER_CENTER, kind.badge(), font, pal.module(kind));
 }
 
+/// Paint the KadeeStudio logo into a square `rect`: a K drawn in a 3×3 grid of
+/// module tiles, with a white AI spark on the amber centre tile. Same geometry as
+/// `assets/app-icon/kadeestudio.svg` (a 256-unit grid).
+pub fn paint_logo(ui: &Ui, rect: Rect) {
+    let pal = Palette::of(ui);
+    let p = ui.painter();
+    let u = rect.width() / 256.0;
+    let at = |x: f32, y: f32| rect.min + Vec2::new(x * u, y * u);
+    let (tile, edge, on, off) = if pal.dark {
+        (
+            Color32::from_rgb(0x23, 0x28, 0x38),
+            Color32::from_rgb(0x34, 0x3B, 0x52),
+            Color32::from_rgb(0x6E, 0x93, 0xF2),
+            Color32::from_rgb(0x34, 0x3B, 0x52),
+        )
+    } else {
+        (Color32::WHITE, Color32::from_rgb(0xE3, 0xE0, 0xD9), Color32::from_rgb(0x2F, 0x5D, 0xD6), Color32::from_rgb(0xDC, 0xE4, 0xF8))
+    };
+    let amber = Color32::from_rgb(0xFF, 0xB0, 0x20);
+    p.rect(rect, CornerRadius::same((58.0 * u) as u8), tile, Stroke::new(1.0, edge), StrokeKind::Inside);
+    let cell = |i: usize, j: usize| Rect::from_min_size(at(41.0 + 66.0 * i as f32, 41.0 + 66.0 * j as f32), Vec2::splat(54.0 * u));
+    let k = [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)];
+    for i in 0..3 {
+        for j in 0..3 {
+            let color = if (i, j) == (1, 1) {
+                amber
+            } else if k.contains(&(i, j)) {
+                on
+            } else {
+                off
+            };
+            p.rect_filled(cell(i, j), CornerRadius::same((15.0 * u).max(1.0) as u8), color);
+        }
+    }
+    // four-point spark on the centre tile
+    let c = cell(1, 1).center();
+    let (r, w) = (20.0 * u, 5.5 * u);
+    let pt = |dx: f32, dy: f32| egui::pos2(c.x + dx, c.y + dy);
+    // a four-point star as two thin diamonds (each convex)
+    p.add(egui::Shape::convex_polygon(vec![pt(0.0, -r), pt(w, 0.0), pt(0.0, r), pt(-w, 0.0)], Color32::WHITE, Stroke::NONE));
+    p.add(egui::Shape::convex_polygon(vec![pt(-r, 0.0), pt(0.0, -w), pt(r, 0.0), pt(0.0, w)], Color32::WHITE, Stroke::NONE));
+}
+
 /// Paint the badge of any document type into `rect`, coloured by its group.
 pub fn paint_doc_badge(ui: &Ui, rect: Rect, kind: &DocKind) {
     let pal = Palette::of(ui);

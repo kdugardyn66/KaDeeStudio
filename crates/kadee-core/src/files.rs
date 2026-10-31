@@ -74,6 +74,31 @@ pub fn create_new_document(kind: ModuleKind, dir: &Path) -> io::Result<PathBuf> 
     Ok(path)
 }
 
+/// A valid one-page blank A4 PDF with `title` in its document info.
+pub fn blank_pdf(title: &str) -> String {
+    let esc: String = title.chars().flat_map(|c| if matches!(c, '(' | ')' | '\\') { vec!['\\', c] } else { vec![c] }).collect();
+    let esc: String = esc.chars().filter(|c| c.is_ascii() && !c.is_ascii_control()).collect();
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << >> >>".to_string(),
+        format!("<< /Title ({esc}) /Producer (KadeeStudio) >>"),
+    ];
+    let mut out = String::from("%PDF-1.4\n");
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.push_str(&format!("{} 0 obj\n{body}\nendobj\n", i + 1));
+    }
+    let xref = out.len();
+    out.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1));
+    for o in offsets {
+        out.push_str(&format!("{o:010} 00000 n \n"));
+    }
+    out.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R /Info 4 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1));
+    out
+}
+
 /// `dir/base.ext`, or `dir/base 2.ext`, `dir/base 3.ext`, … if taken.
 pub fn unique_path(dir: &Path, base: &str, ext: &str) -> PathBuf {
     let first = dir.join(format!("{base}.{ext}"));
@@ -127,7 +152,23 @@ mod tests {
         assert_eq!(a.file_name().unwrap(), "Untitled markdown.md");
         assert_eq!(b.file_name().unwrap(), "Untitled markdown 2.md");
         assert_eq!(fs::read_to_string(&b).unwrap(), "# Untitled markdown 2\n\n");
-        assert!(create_new_document(ModuleKind::Pdf, tmp.path()).is_err());
+        assert!(create_new_document(ModuleKind::Convert, tmp.path()).is_err());
+        let pdf = create_new_document(ModuleKind::Pdf, tmp.path()).unwrap();
+        assert_eq!(pdf.file_name().unwrap(), "Untitled pdf.pdf");
+    }
+
+    #[test]
+    fn blank_pdf_has_a_correct_xref() {
+        let pdf = blank_pdf("Q4 (draft)");
+        assert!(pdf.starts_with("%PDF-1.4") && pdf.ends_with("%%EOF\n"));
+        assert!(pdf.contains("/Title (Q4 \\(draft\\))"));
+        let start: usize = pdf.lines().rev().nth(1).unwrap().parse().unwrap();
+        assert!(pdf[start..].starts_with("xref"));
+        // every xref entry points at its object header
+        for (i, line) in pdf[start..].lines().skip(3).take(4).enumerate() {
+            let off: usize = line[..10].parse().unwrap();
+            assert!(pdf[off..].starts_with(&format!("{} 0 obj", i + 1)), "object {}", i + 1);
+        }
     }
 
     #[test]

@@ -8,19 +8,25 @@
 pub mod craft;
 pub mod doctype;
 pub mod files;
+pub mod installed;
 pub mod library;
 pub mod modules;
+pub mod office;
 pub mod settings;
 pub mod store;
 
 pub use craft::{CRAFT_APPS, CRAFT_PHASE, CraftApp, LAUNCHER_REPO, SOLIDCRAFT_REPO};
 pub use doctype::{DocGroup, DocKind, Opener, all_extensions};
 pub use files::{FileEntry, create_new_document, human_size, list_documents, now, relative_time};
+pub use installed::{InstalledApp, Launch, detect_installed};
 pub use library::{Library, RecentEntry};
 pub use modules::ModuleKind;
-pub use settings::{Settings, ThemePref};
+pub use office::{OfficeKind, create_office_document};
+pub use settings::{Settings, StoredShortcut, ThemePref};
 pub use store::{HomeState, Store};
 
+/// The source code on GitHub.
+pub const SOURCE_REPO: &str = "https://github.com/kdugardyn66/KaDeeStudio";
 /// Product name shown in the UI.
 pub const APP_NAME: &str = "KadeeStudio";
 /// Version from Cargo.

@@ -57,6 +57,12 @@ impl Store {
         &self.dir
     }
 
+    /// Where the user's own templates live: `Templates` next to `home.json`
+    /// (`~/Library/Application Support/be.Kadee.KadeeStudio/Templates` on macOS).
+    pub fn templates_dir(&self) -> PathBuf {
+        self.dir.join("Templates")
+    }
+
     pub fn file(&self) -> PathBuf {
         self.dir.join(FILE_NAME)
     }
@@ -140,5 +146,11 @@ mod tests {
         fs::write(&w, "edited").unwrap();
         seed_documents(&dir).unwrap();
         assert_eq!(fs::read_to_string(w).unwrap(), "edited");
+    }
+
+    #[test]
+    fn templates_folder_is_next_to_home_json() {
+        let store = Store::at(PathBuf::from("/x/be.Kadee.KadeeStudio"));
+        assert_eq!(store.templates_dir(), PathBuf::from("/x/be.Kadee.KadeeStudio/Templates"));
     }
 }

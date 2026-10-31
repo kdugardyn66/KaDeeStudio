@@ -33,6 +33,15 @@ impl ThemePref {
     }
 }
 
+/// A saved keyboard shortcut: a command id and its keys as text
+/// (`"file.new.markdown"`, `"Primary+N M"`). Empty keys = not assigned.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredShortcut {
+    pub command: String,
+    #[serde(default)]
+    pub keys: String,
+}
+
 /// Persisted user settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -46,11 +55,14 @@ pub struct Settings {
     /// Extra folders shown in the sidebar.
     #[serde(default)]
     pub folders: Vec<PathBuf>,
+    /// Customised keyboard shortcuts; `None` = the defaults.
+    #[serde(default)]
+    pub shortcuts: Option<Vec<StoredShortcut>>,
 }
 
 impl Settings {
     /// Defaults for a first launch.
     pub fn with_documents_dir(documents_dir: PathBuf) -> Self {
-        Self { display_name: String::new(), theme: ThemePref::System, documents_dir, folders: Vec::new() }
+        Self { display_name: String::new(), theme: ThemePref::System, documents_dir, folders: Vec::new(), shortcuts: None }
     }
 }

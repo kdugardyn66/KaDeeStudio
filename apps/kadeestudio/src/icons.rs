@@ -20,6 +20,8 @@ pub enum Icon {
     Search,
     Refresh,
     Open,
+    Keyboard,
+    Info,
 }
 
 /// Paint `icon` centred in `rect`.
@@ -78,6 +80,20 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 let (sn, cs) = a.sin_cos();
                 p.line_segment([pos2(c.x + 5.0 * u * cs, c.y + 5.0 * u * sn), pos2(c.x + 7.0 * u * cs, c.y + 7.0 * u * sn)], st);
             }
+        }
+        Icon::Keyboard => {
+            let r = Rect::from_min_max(at(1.5, 4.0), at(14.5, 12.0));
+            p.rect_stroke(r, egui::CornerRadius::same((1.6 * u) as u8), st, egui::StrokeKind::Middle);
+            let dot = (0.75 * u).max(0.9);
+            for (x, y) in [(4.2, 6.6), (6.8, 6.6), (9.4, 6.6), (12.0, 6.6)] {
+                p.circle_filled(at(x, y), dot, color);
+            }
+            line(&[at(5.0, 9.6), at(11.0, 9.6)]);
+        }
+        Icon::Info => {
+            p.circle_stroke(c, 6.2 * u, st);
+            line(&[at(8.0, 7.4), at(8.0, 11.4)]);
+            p.circle_filled(at(8.0, 5.0), (0.85 * u).max(1.0), color);
         }
         Icon::Plus => {
             line(&[at(8.0, 3.0), at(8.0, 13.0)]);

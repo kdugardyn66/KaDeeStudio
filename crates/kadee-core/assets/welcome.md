@@ -8,7 +8,7 @@ self-hosted server (Docker or Kubernetes).
 
 - The start screen: quick-start cards, Recent, Starred and your documents folder
 - New Markdown, Dashboard and Report files are created in `~/Documents/KadeeStudio`
-- **All** lists every file KadeeStudio or a Crafting App opens: Office, graphics, media and 3D files too
+- **All** lists every file KadeeStudio or a Crafting App opens: Office, graphics, audio, video and CAD files too
 - Light, dark and system themes
 
 ## What comes next

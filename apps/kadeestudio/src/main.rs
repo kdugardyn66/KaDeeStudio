@@ -4,12 +4,30 @@
 
 mod app;
 mod icons;
+#[cfg(target_os = "macos")]
+mod mac_menu;
 mod ui;
 
 use app::KadeeApp;
 
 impl eframe::App for KadeeApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        {
+            let actions = match self.mac_menu.as_mut() {
+                Some(menu) => {
+                    menu.sync(&self.keymap, self.recording.is_some());
+                    menu.poll()
+                }
+                None => Vec::new(),
+            };
+            for action in actions {
+                match action {
+                    mac_menu::Action::Run(cmd) => self.send(cmd),
+                    mac_menu::Action::Edit(edit) => mac_menu::edit(ui.ctx(), edit),
+                }
+            }
+        }
         ui::shortcuts(self, ui.ctx());
         ui::shell(self, ui);
         let ctx = ui.ctx().clone();
@@ -36,34 +54,7 @@ fn main() -> eframe::Result {
     eframe::run_native("KadeeStudio", options, Box::new(|cc| Ok(Box::new(KadeeApp::new(cc)))))
 }
 
-/// A 64×64 icon drawn in code: a rounded blue square with a white "K".
+/// The window/taskbar icon: the KadeeStudio logo (module grid with an AI spark).
 fn app_icon() -> egui::IconData {
-    const N: usize = 64;
-    let mut rgba = vec![0u8; N * N * 4];
-    let inside_rounded = |x: f32, y: f32| {
-        let r = 14.0;
-        let cx = x.clamp(r, N as f32 - r);
-        let cy = y.clamp(r, N as f32 - r);
-        (x - cx).powi(2) + (y - cy).powi(2) <= r * r
-    };
-    // "K": a stem and two diagonals, as distance-to-segment strokes.
-    let seg = |px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32| {
-        let (dx, dy) = (bx - ax, by - ay);
-        let t = (((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
-        ((px - ax - t * dx).powi(2) + (py - ay - t * dy).powi(2)).sqrt()
-    };
-    for y in 0..N {
-        for x in 0..N {
-            let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
-            let i = (y * N + x) * 4;
-            if !inside_rounded(fx, fy) {
-                continue;
-            }
-            let d = seg(fx, fy, 22.0, 16.0, 22.0, 48.0).min(seg(fx, fy, 23.0, 34.0, 42.0, 16.0)).min(seg(fx, fy, 28.0, 30.0, 43.0, 48.0));
-            let on = d < 3.4;
-            let (r, g, b) = if on { (255, 255, 255) } else { (0x2F, 0x5D, 0xD6) };
-            rgba[i..i + 4].copy_from_slice(&[r, g, b, 255]);
-        }
-    }
-    egui::IconData { rgba, width: N as u32, height: N as u32 }
+    eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/app-icon/kadeestudio-tile-512.png")).unwrap_or_default()
 }

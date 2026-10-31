@@ -100,13 +100,14 @@ impl ModuleKind {
     }
 
     /// Extension of a new document, if this module creates documents.
-    /// PDF and Convert work on existing files, so they create none.
+    /// Convert works on existing files, so it creates none; a new PDF is one blank A4 page.
     pub fn new_extension(self) -> Option<&'static str> {
         match self {
             ModuleKind::Markdown => Some("md"),
+            ModuleKind::Pdf => Some("pdf"),
             ModuleKind::Dashboard => Some("kdash"),
             ModuleKind::Report => Some("kreport"),
-            ModuleKind::Pdf | ModuleKind::Convert => None,
+            ModuleKind::Convert => None,
         }
     }
 
@@ -120,7 +121,8 @@ impl ModuleKind {
             ModuleKind::Report => format!(
                 "{{\n  \"kadee\": \"report\",\n  \"version\": 1,\n  \"title\": \"{title}\",\n  \"page\": \"A4\",\n  \"sections\": []\n}}\n"
             ),
-            ModuleKind::Pdf | ModuleKind::Convert => String::new(),
+            ModuleKind::Pdf => crate::files::blank_pdf(title),
+            ModuleKind::Convert => String::new(),
         }
     }
 
