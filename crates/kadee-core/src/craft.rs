@@ -45,7 +45,7 @@ pub const CRAFT_PHASE: u8 = 7;
 /// project-file pattern and still need confirming against those apps.
 pub const CRAFT_APPS: [CraftApp; 14] = [
     CraftApp {
-        name: "CadCraft",
+        name: "CADCraft",
         id: "cadcraft",
         aliases: &["CADCraft"],
         bundle_id: "ai.storyteller.cadcraft",
@@ -224,10 +224,10 @@ mod tests {
         let mut sorted = names.clone();
         sorted.sort_unstable();
         assert_eq!(names, sorted);
-        for n in ["CadCraft", "FigCraft", "SoundCraft"] {
+        for n in ["CADCraft", "FigCraft", "SoundCraft"] {
             assert!(names.contains(&n), "{n} missing");
         }
-        assert_eq!(craft_for_extension("dwg").unwrap().name, "CadCraft");
+        assert_eq!(craft_for_extension("dwg").unwrap().name, "CADCraft");
         assert_eq!(craft_for_extension("fig").unwrap().name, "FigCraft");
         assert_eq!(craft_for_extension("flac").unwrap().name, "SoundCraft");
     }

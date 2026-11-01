@@ -19,7 +19,7 @@ Phase 0: the start screen.
 - Native Rust desktop shell (egui/eframe): tab strip with Home and one tab per file, sidebar, light/dark/system theme.
 - Quick-start tiles for Markdown, PDF, Dashboard and Report, plus Open file.
 - Documents table with filter pills (All, Office, Markdown, PDF, Dashboard, Report, Graphics, Media, CAD), search, sorting, stars and a right-click menu. **All** lists every file type KadeeStudio or a Crafting App opens.
-- Crafting Apps strip and page, alphabetically: CadCraft, DeckCraft, DesignCraft, EffectCraft, FigCraft, FilmCraft, GridCraft, LightCraft, PdfCraft, PhotoCraft, SolidCraft, SoundCraft, VectorCraft, WordCraft.
+- Crafting Apps strip and page, alphabetically: CADCraft, DeckCraft, DesignCraft, EffectCraft, FigCraft, FilmCraft, GridCraft, LightCraft, PdfCraft, PhotoCraft, SolidCraft, SoundCraft, VectorCraft, WordCraft.
 - Settings popup with General, Keyboard and About. Done keeps changes, Cancel / × / Esc puts them back. About combines the version, build, system, installed Crafting Apps, credits and license; on macOS the menu bar's About KadeeStudio opens it too.
 - macOS menu bar like ONLYOFFICE's: KadeeStudio, File, Edit, Window and Help menus, with the shortcuts from the key map shown on the items.
 - About: *Source code* opens github.com/kdugardyn66/KaDeeStudio; *Open templates folder* opens `Templates` next to `home.json` (`~/Library/Application Support/be.Kadee.KadeeStudio/Templates` on macOS).
