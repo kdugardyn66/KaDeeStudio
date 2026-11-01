@@ -1,110 +1,102 @@
-//! The Settings window: General, Keyboard and About in one popup, with a
-//! section list on the left and Cancel / Done at the bottom. Changes show at
-//! once; Done keeps them, Cancel (or Esc, or ×) puts back what was there.
+//! Settings, in the middle pane of Home: General, Keyboard, AI providers, AI models, About and
+//! the two license agreements, with a section list on the left and Cancel / Done at the
+//! bottom. Changes show at once; Done (or going to another page) keeps them, Cancel (or Esc,
+//! or ×) puts back what was there.
 
 use super::icon_button;
 use crate::app::{KadeeApp, OS};
 use crate::icons::{self, Icon};
 use egui::{Align2, Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, pos2, vec2};
 use kadee_commands::{Command, SettingsSection};
-use kadee_core::{CRAFT_APPS, LAUNCHER_REPO, ThemePref};
+use kadee_core::{CRAFT_APPS, LAUNCHER_REPO, OpenIn, ThemePref};
 use kadee_ui::{Palette, primary_button};
 
 const HEADER: f32 = 68.0;
 const FOOTER: f32 = 72.0;
 const NAV: f32 = 232.0;
 
-/// Show the window if it is open.
-pub fn window(app: &mut KadeeApp, ui: &Ui) {
+/// The License Agreement texts shipped with KadeeStudio.
+const LICENSE_MIT: &str = include_str!("../../../../LICENSE-MIT");
+const LICENSE_APACHE: &str = include_str!("../../../../LICENSE-APACHE");
+
+/// Settings in the middle pane, while they are open.
+pub fn page(app: &mut KadeeApp, ui: &mut Ui) {
     let Some(section) = app.settings_window.as_ref().map(|w| w.section) else { return };
     let ctx = ui.ctx().clone();
     let pal = Palette::of(ui);
-    let screen = ctx.content_rect();
-    let size = vec2((screen.width() - 80.0).min(980.0), (screen.height() - 80.0).min(740.0));
     let mut close: Option<bool> = None; // Some(true) = Done, Some(false) = Cancel
     let mut goto = None;
+    let outer = ui.max_rect().shrink2(vec2(28.0, 20.0));
+    ui.painter().rect(outer, CornerRadius::same(14), pal.surface, Stroke::new(1.0, pal.border), egui::StrokeKind::Inside);
+    let rect = outer;
+    let header = Rect::from_min_size(rect.min, vec2(rect.width(), HEADER));
+    let footer = Rect::from_min_max(pos2(rect.min.x, rect.max.y - FOOTER), rect.max);
+    let body = Rect::from_min_max(pos2(rect.min.x, header.max.y), pos2(rect.max.x, footer.min.y));
+    let nav = Rect::from_min_size(body.min, vec2(NAV, body.height()));
+    let content = Rect::from_min_max(pos2(nav.max.x + 1.0, body.min.y), body.max);
+    let p = ui.painter();
+    p.hline(rect.x_range(), header.max.y, Stroke::new(1.0, pal.border));
+    p.hline(rect.x_range(), footer.min.y, Stroke::new(1.0, pal.border));
+    p.vline(nav.max.x, body.y_range(), Stroke::new(1.0, pal.border));
 
-    let resp = egui::Modal::new(egui::Id::unique("kadee-settings"))
-        .frame(
-            egui::Frame::new()
-                .fill(pal.surface)
-                .stroke(Stroke::new(1.0, pal.border_strong))
-                .corner_radius(CornerRadius::same(16))
-                .shadow(egui::epaint::Shadow { offset: [0, 12], blur: 40, spread: 0, color: Color32::from_black_alpha(90) }),
-        )
-        .show(&ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            let header = Rect::from_min_size(rect.min, vec2(rect.width(), HEADER));
-            let footer = Rect::from_min_max(pos2(rect.min.x, rect.max.y - FOOTER), rect.max);
-            let body = Rect::from_min_max(pos2(rect.min.x, header.max.y), pos2(rect.max.x, footer.min.y));
-            let nav = Rect::from_min_size(body.min, vec2(NAV, body.height()));
-            let content = Rect::from_min_max(pos2(nav.max.x + 1.0, body.min.y), body.max);
-            let p = ui.painter();
-            p.hline(rect.x_range(), header.max.y, Stroke::new(1.0, pal.border));
-            p.hline(rect.x_range(), footer.min.y, Stroke::new(1.0, pal.border));
-            p.vline(nav.max.x, body.y_range(), Stroke::new(1.0, pal.border));
+    // Header: title and ×
+    p.text(pos2(header.min.x + 32.0, header.center().y), Align2::LEFT_CENTER, "Settings", FontId::proportional(21.0), pal.text);
+    region(ui, Rect::from_center_size(pos2(header.max.x - 38.0, header.center().y), Vec2::splat(30.0)), |ui| {
+        if icon_button(ui, Icon::Close, "Close without keeping the changes (Esc)").clicked() {
+            close = Some(false);
+        }
+    });
 
-            // Header: title and ×
-            p.text(pos2(header.min.x + 32.0, header.center().y), Align2::LEFT_CENTER, "Settings", FontId::proportional(21.0), pal.text);
-            region(ui, Rect::from_center_size(pos2(header.max.x - 38.0, header.center().y), Vec2::splat(30.0)), |ui| {
-                if icon_button(ui, Icon::Close, "Close without saving (Esc)").clicked() {
-                    close = Some(false);
+    // Sections
+    region(ui, nav.shrink2(vec2(16.0, 18.0)), |ui| {
+        ui.spacing_mut().item_spacing.y = 4.0;
+        for s in SettingsSection::ALL {
+            if nav_item(ui, s, s == section) {
+                goto = Some(s);
+            }
+        }
+    });
+
+    // Content
+    region(ui, content, |ui| {
+        egui::ScrollArea::vertical().id_salt(("settings", section.label())).auto_shrink([false, false]).show(ui, |ui| {
+            egui::Frame::new().inner_margin(Margin { left: 36, right: 36, top: 28, bottom: 28 }).show(ui, |ui| {
+                // fixed width: room for the scroll bar, so cards never run past the edge
+                ui.set_width(content.width() - 72.0 - 16.0);
+                match section {
+                    SettingsSection::General => general(app, ui),
+                    SettingsSection::Keyboard => super::pages::shortcuts_editor(app, ui),
+                    SettingsSection::AiProviders => super::ai_settings::providers(app, ui),
+                    SettingsSection::AiModels => super::ai_settings::models(app, ui),
+                    SettingsSection::About => about(app, ui),
+                    SettingsSection::LicenseMit => license(ui, "MIT License", LICENSE_MIT),
+                    SettingsSection::LicenseApache => license(ui, "Apache License 2.0", LICENSE_APACHE),
                 }
-            });
-
-            // Sections
-            region(ui, nav.shrink2(vec2(16.0, 18.0)), |ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
-                for s in SettingsSection::ALL {
-                    if nav_item(ui, s, s == section) {
-                        goto = Some(s);
-                    }
-                }
-            });
-
-            // Content
-            region(ui, content, |ui| {
-                egui::ScrollArea::vertical().id_salt(("settings", section.label())).auto_shrink([false, false]).show(ui, |ui| {
-                    egui::Frame::new().inner_margin(Margin { left: 36, right: 36, top: 28, bottom: 28 }).show(ui, |ui| {
-                        // fixed width: room for the scroll bar, so cards never run past the edge
-                        ui.set_width(content.width() - 72.0 - 16.0);
-                        match section {
-                            SettingsSection::General => general(app, ui),
-                            SettingsSection::Keyboard => super::pages::shortcuts_editor(app, ui),
-                            SettingsSection::AiProviders => super::ai_settings::providers(app, ui),
-                            SettingsSection::AiModels => super::ai_settings::models(app, ui),
-                            SettingsSection::About => about(app, ui),
-                        }
-                    });
-                });
-            });
-
-            // Footer: note, Cancel, Done
-            region(ui, footer.shrink2(vec2(32.0, 0.0)), |ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 12.0;
-                    ui.spacing_mut().button_padding = vec2(18.0, 8.0);
-                    if primary_button(ui, "Done").clicked() {
-                        close = Some(true);
-                    }
-                    if ui.button(RichText::new("Cancel").size(14.0)).clicked() {
-                        close = Some(false);
-                    }
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new("Changes, including AI settings, are saved when you click Done.")
-                                .size(13.0)
-                                .color(pal.text_faint),
-                        );
-                    });
-                });
             });
         });
+    });
 
-    // Esc (when not recording a shortcut) is Cancel; a click beside the window does nothing.
+    // Footer: note, Cancel, Done
+    region(ui, footer.shrink2(vec2(32.0, 0.0)), |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 12.0;
+            ui.spacing_mut().button_padding = vec2(18.0, 8.0);
+            if primary_button(ui, "Done").clicked() {
+                close = Some(true);
+            }
+            if ui.button(RichText::new("Cancel").size(14.0)).clicked() {
+                close = Some(false);
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.label(RichText::new("Changes, including AI settings, are saved when you click Done.").size(13.0).color(pal.text_faint));
+            });
+        });
+    });
+
+    // Esc (when not recording a shortcut and no text field is being typed in) is Cancel.
     if close.is_none()
         && app.recording.is_none()
-        && resp.is_top_modal
+        && !ctx.egui_wants_keyboard_input()
         && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
     {
         close = Some(false);
@@ -127,6 +119,7 @@ fn section_icon(s: SettingsSection) -> Icon {
         SettingsSection::Keyboard => Icon::Keyboard,
         SettingsSection::AiProviders | SettingsSection::AiModels => Icon::Sparkles,
         SettingsSection::About => Icon::Info,
+        SettingsSection::LicenseMit | SettingsSection::LicenseApache => Icon::NewDoc,
     }
 }
 
@@ -258,7 +251,8 @@ fn general(app: &mut KadeeApp, ui: &mut Ui) {
         }
     });
 
-    field(ui, "Save new documents in", "Also the KadeeStudio folder in the sidebar.", |ui| {
+    let hint = format!("The first folder under Folders in the sidebar, shown as “{}”.", app.documents_name());
+    field(ui, "Save new documents in", &hint, |ui| {
         ui.horizontal(|ui| {
             let w = ui.available_width() - 110.0;
             egui::Frame::new()
@@ -282,6 +276,15 @@ fn general(app: &mut KadeeApp, ui: &mut Ui) {
         });
     });
 
+    open_in(
+        ui,
+        app,
+        "Open each module in a new",
+        "Kadee Markdown, Kadee PDF …: when the module is open already, KadeeStudio switches to it.",
+        true,
+    );
+    open_in(ui, app, "Open each file in a new", "When the file is open already, KadeeStudio switches to its tab.", false);
+
     field(ui, "Team server", "Real-time collaboration through your own server on Docker or Kubernetes — Phase 3.", |ui| {
         ui.add_enabled(false, egui::Button::new("Connect…"));
     });
@@ -295,6 +298,58 @@ fn general(app: &mut KadeeApp, ui: &mut Ui) {
             app.send(Command::OpenSettings(SettingsSection::About));
         }
     });
+}
+
+/// "Open … in a new Tab / Window". Windows come in a later version: the choice is shown, but
+/// only Tab can be picked for now.
+fn open_in(ui: &mut Ui, app: &mut KadeeApp, label: &str, hint: &str, modules: bool) {
+    let pal = Palette::of(ui);
+    let value = if modules { app.state.settings.open_modules_in } else { app.state.settings.open_files_in };
+    let mut picked = None;
+    field(ui, label, hint, |ui| {
+        egui::Frame::new().fill(pal.canvas).corner_radius(CornerRadius::same(9)).inner_margin(Margin::same(3)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for v in OpenIn::ALL {
+                    let on = v == value;
+                    let ready = v == OpenIn::Tab;
+                    let text = RichText::new(v.label()).size(13.5).color(if on { pal.text } else { pal.text_muted });
+                    let b = egui::Button::new(text)
+                        .fill(if on { pal.surface_hover } else { Color32::TRANSPARENT })
+                        .stroke(if on { Stroke::new(1.0, pal.border) } else { Stroke::NONE })
+                        .corner_radius(CornerRadius::same(7))
+                        .min_size(vec2(76.0, 28.0));
+                    let r = ui.add_enabled(ready, b).on_disabled_hover_text("Separate windows come in a later version of KadeeStudio.");
+                    if r.clicked() && !on {
+                        picked = Some(v);
+                    }
+                }
+            });
+        });
+    });
+    if let Some(v) = picked {
+        if modules {
+            app.state.settings.open_modules_in = v;
+        } else {
+            app.state.settings.open_files_in = v;
+        }
+        app.mark_dirty();
+    }
+}
+
+/// A License Agreement: its text, as shipped in the repository.
+fn license(ui: &mut Ui, title: &str, text: &str) {
+    let pal = Palette::of(ui);
+    heading(ui, &format!("License Agreement — {title}"), "KadeeStudio is licensed under MIT OR Apache-2.0, at your option.");
+    egui::Frame::new()
+        .fill(pal.canvas)
+        .stroke(Stroke::new(1.0, pal.border))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin::symmetric(20, 16))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.add(egui::Label::new(RichText::new(text).monospace().size(12.5).color(pal.text)).selectable(true));
+        });
 }
 
 /// Version, build and system in one line, for "Copy version info".
@@ -342,7 +397,7 @@ pub fn about(app: &mut KadeeApp, ui: &mut Ui) {
         RichText::new(
             "A native Rust office suite: AI, Markdown, PDF, conversion, dashboards and reports, with real-time \
              collaboration through your own server on Docker or Kubernetes. It also brings together the Crafting Apps. \
-             This release is Phase 0: the start screen.",
+             This release is Phase 2: Kadee Markdown, with KaDee AI.",
         )
         .size(14.0)
         .color(pal.text_muted),
@@ -391,7 +446,7 @@ pub fn about(app: &mut KadeeApp, ui: &mut Ui) {
                 ui.label(RichText::new(v).color(pal.text));
                 ui.end_row();
             };
-            row(ui, "Version", format!("{} (Phase 0)", kadee_core::VERSION));
+            row(ui, "Version", format!("{} (Phase 2)", kadee_core::VERSION));
             row(ui, "Build", format!("{} · {}", env!("KADEE_COMMIT"), env!("KADEE_BUILD_DATE")));
             row(ui, "System", format!("{} · {}", OS.name(), std::env::consts::ARCH));
             row(ui, "Renderer", renderer().to_string());
@@ -460,7 +515,24 @@ pub fn about(app: &mut KadeeApp, ui: &mut Ui) {
             "The Crafting App names and icons belong to the ArtCraft team, Tangency Labs and each app's contributors; the icons are used under MIT OR Apache-2.0.",
         );
         line(ui, "KaDee AI is derived from the SolarOffice AI layer by the same author (MIT OR Apache-2.0).");
-        line(ui, "KadeeStudio is licensed under MIT OR Apache-2.0.");
+        line(ui, "Kadee Markdown is built on mdcraft and the MarkDown Live renderer by the same author (MIT OR Apache-2.0).");
+        // "MIT" and "Apache-2.0" open the License Agreements
+        ui.horizontal(|ui| {
+            let t = |s: &str| RichText::new(s).color(pal.text_muted);
+            let parts = [t("KadeeStudio is licensed under "), t(" OR "), t(".")];
+            let lead = ui.painter().layout_no_wrap("KadeeStudio is licensed under MIT OR Apache-2.0.".into(), FontId::proportional(14.0), pal.text);
+            ui.add_space(((ui.available_width() - lead.size().x) / 2.0).max(0.0));
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.label(parts[0].clone());
+            if ui.link("MIT").on_hover_text("License Agreement — MIT").clicked() {
+                app.send(Command::OpenSettings(SettingsSection::LicenseMit));
+            }
+            ui.label(parts[1].clone());
+            if ui.link("Apache-2.0").on_hover_text("License Agreement — Apache-2.0").clicked() {
+                app.send(Command::OpenSettings(SettingsSection::LicenseApache));
+            }
+            ui.label(parts[2].clone());
+        });
         ui.add_space(4.0);
         ui.label(RichText::new("© 2026 Kris Dugardyn").color(pal.text_faint));
         });

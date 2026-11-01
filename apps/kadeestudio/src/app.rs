@@ -4,8 +4,8 @@ use crate::ui::keys::Recording;
 use kadee_ai::{AiHub, ChatState};
 use kadee_commands::{Command, Keymap, Matcher, Os, Page, SettingsSection, display_sequence};
 use kadee_core::{
-    DocGroup, DocKind, FileEntry, HomeState, InstalledApp, ModuleKind, Settings, Store, StoredShortcut, all_extensions,
-    create_new_document, create_office_document, detect_installed, list_documents, now,
+    DocGroup, DocKind, FileEntry, HomeState, InstalledApp, ModuleKind, Settings, Store, StoredShortcut, create_folder, create_new_document,
+    create_office_document, detect_installed, list_documents, list_subfolders, now, rename_folder,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -20,6 +20,14 @@ pub enum SortKey {
     Opened,
     Modified,
     Size,
+}
+
+/// A question about a folder in the sidebar's tree or the folder page.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FolderDialog {
+    New { parent: PathBuf, name: String },
+    Rename { dir: PathBuf, name: String },
+    Delete { dir: PathBuf },
 }
 
 /// The Settings window while it is open, with what to go back to on Cancel.
@@ -46,6 +54,16 @@ pub struct KadeeApp {
     pub sort_desc: bool,
     /// Documents in the documents folder (rescanned on demand).
     pub docs: Vec<FileEntry>,
+    /// The folder the Folder page shows (the KadeeStudio folder, a pinned folder or one below).
+    pub folder: Option<PathBuf>,
+    /// Documents directly in `folder`.
+    pub folder_docs: Vec<FileEntry>,
+    /// Sub-folders directly in `folder`.
+    pub folder_subdirs: Vec<PathBuf>,
+    /// Sub-folders of the folders shown in the sidebar's tree, read once and kept until a rescan.
+    tree: HashMap<PathBuf, Vec<PathBuf>>,
+    /// New folder, Rename or Delete folder, while it asks.
+    pub folder_dialog: Option<FolderDialog>,
     pub toast: Option<(String, f64)>,
     pub queue: Vec<Command>,
     /// Keyboard shortcuts in use (defaults or the user's own).
@@ -53,8 +71,10 @@ pub struct KadeeApp {
     pub matcher: Matcher,
     /// A shortcut being recorded on the Keyboard shortcuts page.
     pub recording: Option<Recording>,
-    /// The New document chooser is open.
+    /// The New document page is showing and takes the letter after Cmd+N (M, P, D …).
     pub new_picker: bool,
+    /// A file waiting for "Move to Trash?" (the Recent list's bin).
+    pub delete_confirm: Option<PathBuf>,
     /// Keys that opened the New document menu (Cmd+N); a letter after them picks the type.
     pub picker_prefix: Vec<kadee_commands::Chord>,
     /// Action picked in "Add a shortcut".
@@ -102,12 +122,18 @@ impl KadeeApp {
             sort: SortKey::Modified,
             sort_desc: true,
             docs: Vec::new(),
+            folder: None,
+            folder_docs: Vec::new(),
+            folder_subdirs: Vec::new(),
+            tree: HashMap::new(),
+            folder_dialog: None,
             toast: None,
             queue: Vec::new(),
             keymap: Keymap::defaults(OS),
             matcher: Matcher::default(),
             recording: None,
             new_picker: false,
+            delete_confirm: None,
             picker_prefix: Vec::new(),
             add_choice: 0,
             meta_down: false,
@@ -150,7 +176,10 @@ impl KadeeApp {
                             "recent" => Page::Recent,
                             "starred" => Page::Starred,
                             "craft" => Page::CraftApps,
-                            "ai" => Page::Ai,
+                            "ai" => {
+                                app.ai_pane = true;
+                                Page::Home
+                            }
                             "folder" => Page::Folder,
                             _ => Page::Home,
                         }
@@ -179,6 +208,108 @@ impl KadeeApp {
 
     pub fn rescan(&mut self) {
         self.docs = list_documents(&self.state.settings.documents_dir);
+        let shown = self.shown_folder();
+        self.folder_docs = list_documents(&shown);
+        self.folder_subdirs = list_subfolders(&shown);
+        self.tree.clear();
+    }
+
+    /// The folder the Folder page shows (the KadeeStudio folder until another is picked).
+    pub fn shown_folder(&self) -> PathBuf {
+        self.folder.clone().unwrap_or_else(|| self.state.settings.documents_dir.clone())
+    }
+
+    /// The name of the documents folder as the start screen shows it: the folder's own name
+    /// (`KadeeStudio` for the default `~/Documents/KadeeStudio`, `Work` after choosing `~/Work`).
+    pub fn documents_name(&self) -> String {
+        file_name(&self.state.settings.documents_dir)
+    }
+
+    /// The roots of the sidebar's folder tree: the KadeeStudio folder, then the added folders.
+    pub fn folder_roots(&self) -> Vec<PathBuf> {
+        let mut v = vec![self.state.settings.documents_dir.clone()];
+        v.extend(self.state.settings.folders.iter().filter(|d| **d != self.state.settings.documents_dir).cloned());
+        v
+    }
+
+    /// The sub-folders of `dir` for the tree (read from disk once, then kept until a rescan).
+    pub fn subfolders(&mut self, dir: &Path) -> Vec<PathBuf> {
+        self.tree.entry(dir.to_path_buf()).or_insert_with(|| list_subfolders(dir)).clone()
+    }
+
+    pub fn is_expanded(&self, dir: &Path) -> bool {
+        self.state.settings.expanded_folders.iter().any(|d| d == dir)
+    }
+
+    /// Where new documents go: the folder on screen, else the KadeeStudio folder.
+    fn new_document_dir(&self) -> PathBuf {
+        let dir = self.shown_folder();
+        if self.active == 0 && self.page == Page::Folder && dir.is_dir() { dir } else { self.state.settings.documents_dir.clone() }
+    }
+
+    /// Create the folder `parent/name`, open its parent in the tree and show it.
+    pub fn create_folder(&mut self, parent: &Path, name: &str, time: f64) -> bool {
+        match create_folder(parent, name) {
+            Ok(dir) => {
+                if !self.is_expanded(parent) {
+                    self.state.settings.expanded_folders.push(parent.to_path_buf());
+                    self.mark_dirty();
+                }
+                self.send(Command::ShowFolder(dir));
+                true
+            }
+            Err(e) => {
+                self.notify(format!("Could not create the folder: {e}"), time);
+                false
+            }
+        }
+    }
+
+    /// Rename a folder; open tabs, Recent, Starred and the tree follow it.
+    pub fn rename_folder(&mut self, dir: &Path, name: &str, time: f64) -> bool {
+        match rename_folder(dir, name) {
+            Ok(to) => {
+                self.state.library.rename_dir(dir, &to);
+                let moved = |p: &PathBuf| p.strip_prefix(dir).ok().map(|rest| to.join(rest));
+                for d in self.state.settings.expanded_folders.iter_mut() {
+                    if let Some(n) = moved(d) {
+                        *d = n;
+                    }
+                }
+                if let Some(n) = self.folder.as_ref().and_then(moved) {
+                    self.folder = Some(n);
+                }
+                // documents open in tabs are left where they are: their editors still hold the old path
+                self.mark_dirty();
+                self.rescan();
+                true
+            }
+            Err(e) => {
+                self.notify(format!("Could not rename the folder: {e}"), time);
+                false
+            }
+        }
+    }
+
+    /// Move a folder and everything in it to the Trash.
+    pub fn trash_folder(&mut self, dir: &Path, time: f64) {
+        let open: Vec<PathBuf> = self.tabs.iter().filter(|t| t.starts_with(dir)).cloned().collect();
+        if !open.is_empty() {
+            self.notify("Close the documents from this folder first", time);
+            return;
+        }
+        match trash::delete(dir) {
+            Ok(()) => {
+                self.state.settings.expanded_folders.retain(|d| !d.starts_with(dir));
+                if self.folder.as_ref().is_some_and(|f| f.starts_with(dir)) {
+                    self.folder = dir.parent().map(Path::to_path_buf);
+                }
+                self.mark_dirty();
+                self.rescan();
+                self.notify(format!("Moved “{}” to the Trash", file_name(dir)), time);
+            }
+            Err(e) => self.notify(format!("Could not delete the folder: {e}"), time),
+        }
     }
 
     pub fn mark_dirty(&mut self) {
@@ -213,8 +344,10 @@ impl KadeeApp {
         self.keymap.keys_for(cmd).map(|k| display_sequence(k, OS))
     }
 
-    /// Open the Settings window at `section`; remembers the settings for Cancel.
+    /// Open Settings at `section` in the middle pane of Home; remembers the settings for Cancel.
     pub fn open_settings(&mut self, section: SettingsSection) {
+        self.active = 0;
+        self.new_picker = false;
         match &mut self.settings_window {
             Some(w) => w.section = section,
             None => {
@@ -269,7 +402,7 @@ impl KadeeApp {
         let mut entries: Vec<FileEntry> = match self.page {
             Page::Recent => lib.recent.iter().filter_map(|r| FileEntry::from_path(&r.path)).collect(),
             Page::Starred => lib.starred.iter().filter_map(|p| FileEntry::from_path(p)).collect(),
-            Page::Folder => self.docs.clone(),
+            Page::Folder => self.folder_docs.clone(),
             _ => {
                 // Home: the documents folder plus anything opened from elsewhere.
                 let mut v = self.docs.clone();
@@ -355,6 +488,33 @@ impl KadeeApp {
         }
     }
 
+    /// Run a command of the editor in the tab of `path` (`file.save`, `file.print` …).
+    /// False when that tab has no editor.
+    pub fn run_in_editor(&mut self, path: &Path, command: &str) -> bool {
+        #[cfg(unix)]
+        {
+            self.markdown.run_command(path, command)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (path, command);
+            false
+        }
+    }
+
+    /// True when the active tab has an editor (Save, Save As and Print work there).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // the macOS menu greys out Save and Print without one
+    pub fn has_editor(&self) -> bool {
+        #[cfg(unix)]
+        {
+            self.active > 0 && self.tabs.get(self.active - 1).is_some_and(|p| self.markdown.ready(p))
+        }
+        #[cfg(not(unix))]
+        {
+            false
+        }
+    }
+
     /// The name shown on a file's tab: the Markdown editor's (with • while unsaved), else the file's.
     pub fn tab_name(&self, path: &Path) -> String {
         #[cfg(unix)]
@@ -375,11 +535,8 @@ impl KadeeApp {
 
     fn run(&mut self, cmd: Command, ctx: &egui::Context, time: f64) {
         match cmd {
-            Command::NewDocumentPicker => {
-                self.picker_prefix = self.keymap.keys_for(&Command::NewDocumentPicker).map(<[_]>::to_vec).unwrap_or_default();
-                self.new_picker = true;
-            }
-            Command::NewOffice(kind) => match create_office_document(kind, &self.state.settings.documents_dir) {
+            Command::NewDocumentPicker => self.send(Command::ShowPage(Page::New)),
+            Command::NewOffice(kind) => match create_office_document(kind, &self.new_document_dir()) {
                 Ok(path) => {
                     let name = file_name(&path);
                     self.open_tab(path);
@@ -388,7 +545,7 @@ impl KadeeApp {
                 }
                 Err(e) => self.notify(format!("Could not create the file: {e}"), time),
             },
-            Command::NewDocument(kind) => match create_new_document(kind, &self.state.settings.documents_dir) {
+            Command::NewDocument(kind) => match create_new_document(kind, &self.new_document_dir()) {
                 Ok(path) => {
                     let name = file_name(&path);
                     self.open_tab(path);
@@ -406,11 +563,28 @@ impl KadeeApp {
                 self.notify(format!("{} arrives in Phase {} of the roadmap", kind.name(), kind.phase()), time);
             }
             Command::OpenDialog => {
-                let dialog = rfd::FileDialog::new()
-                    .set_directory(&self.state.settings.documents_dir)
-                    .add_filter("All supported documents", &all_extensions());
-                if let Some(path) = dialog.pick_file() {
+                if let Some(path) = open_dialog(&self.state.settings.documents_dir) {
                     self.send(Command::OpenPath(path));
+                }
+            }
+            Command::Save | Command::SaveAs | Command::Print => {
+                let page_cmd = match cmd {
+                    Command::Save => "file.save",
+                    Command::SaveAs => "file.saveAs",
+                    _ => "file.print",
+                };
+                let done = self.active > 0 && self.tabs.get(self.active - 1).cloned().is_some_and(|p| self.run_in_editor(&p, page_cmd));
+                if !done {
+                    self.notify("Open a document to save or print it", time);
+                }
+            }
+            Command::DeleteFile(path) => {
+                if path.exists() {
+                    self.delete_confirm = Some(path);
+                } else {
+                    self.state.library.forget(&path);
+                    self.mark_dirty();
+                    self.notify("Removed from Recent: the file no longer exists", time);
                 }
             }
             Command::OpenPath(path) => {
@@ -429,11 +603,76 @@ impl KadeeApp {
                 },
                 None => self.notify("That Crafting App is not installed on this computer", time),
             },
+            // KaDee AI opens in the pane on the right, beside whatever is showing.
+            Command::ShowPage(Page::Ai) => self.ai_pane = true,
+            Command::PinFolder => {
+                let start = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf()).unwrap_or_default();
+                if let Some(dir) = rfd::FileDialog::new().set_title("Pin a folder").set_directory(start).pick_folder() {
+                    if dir == self.state.settings.documents_dir {
+                        self.send(Command::ShowPage(Page::Folder));
+                    } else {
+                        if !self.state.settings.folders.contains(&dir) {
+                            self.state.settings.folders.push(dir.clone());
+                            self.mark_dirty();
+                            self.notify(format!("Pinned “{}”", file_name(&dir)), time);
+                        }
+                        self.send(Command::ShowFolder(dir));
+                    }
+                }
+            }
+            Command::ToggleFolder(dir) => {
+                if self.is_expanded(&dir) {
+                    self.state.settings.expanded_folders.retain(|d| *d != dir);
+                } else {
+                    self.state.settings.expanded_folders.push(dir.clone());
+                    self.tree.remove(&dir);
+                }
+                self.mark_dirty();
+            }
+            Command::NewFolder(parent) => {
+                self.folder_dialog = Some(FolderDialog::New { parent, name: "New folder".into() });
+            }
+            Command::RenameFolder(dir) => {
+                let name = file_name(&dir);
+                self.folder_dialog = Some(FolderDialog::Rename { dir, name });
+            }
+            Command::DeleteFolder(dir) => self.folder_dialog = Some(FolderDialog::Delete { dir }),
+            Command::UnpinFolder(dir) => {
+                self.state.settings.folders.retain(|d| *d != dir);
+                self.mark_dirty();
+                if self.page == Page::Folder && self.folder.as_ref() == Some(&dir) {
+                    self.send(Command::ShowPage(Page::Home));
+                }
+                self.notify(format!("Unpinned “{}”", file_name(&dir)), time);
+            }
+            Command::ShowFolder(dir) => {
+                if self.settings_window.is_some() {
+                    self.close_settings(true, ctx);
+                }
+                self.page = Page::Folder;
+                self.active = 0;
+                self.new_picker = false;
+                self.folder = Some(dir);
+                self.rescan();
+            }
             Command::ShowPage(page) => {
+                if self.settings_window.is_some() {
+                    self.close_settings(true, ctx);
+                }
+                if page == Page::Folder {
+                    self.folder = Some(self.state.settings.documents_dir.clone());
+                }
                 self.page = page;
                 self.active = 0;
+                self.new_picker = page == Page::New;
+                if page == Page::New {
+                    self.picker_prefix = self.keymap.keys_for(&Command::NewDocumentPicker).map(<[_]>::to_vec).unwrap_or_default();
+                }
                 if page == Page::Folder || page == Page::Home {
                     self.rescan();
+                }
+                if page == Page::Starred && self.state.library.prune_starred() {
+                    self.mark_dirty();
                 }
             }
             Command::ActivateTab(n) => {
@@ -491,6 +730,40 @@ impl KadeeApp {
                 self.notify("Refreshed", time);
             }
         }
+    }
+}
+
+/// The Open dialog with a File type choice: All supported documents, Markdown documents, PDF
+/// documents … (on macOS a File type menu under the panel; elsewhere the dialog's filter list).
+fn open_dialog(dir: &Path) -> Option<PathBuf> {
+    let types = kadee_core::open_dialog_types();
+    #[cfg(target_os = "macos")]
+    {
+        crate::mac_open::open_panel("Open", Some(dir), &types)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut d = rfd::FileDialog::new().set_title("Open").set_directory(dir);
+        for (label, exts) in &types {
+            d = d.add_filter(label, exts);
+        }
+        d.pick_file()
+    }
+}
+
+/// Move `path` to the Trash and forget it in Recent and Starred.
+pub fn trash_file(app: &mut KadeeApp, path: &Path, time: f64) {
+    match trash::delete(path) {
+        Ok(()) => {
+            app.state.library.forget(path);
+            app.remove_tab(path);
+            #[cfg(unix)]
+            app.markdown.forget(path);
+            app.mark_dirty();
+            app.rescan();
+            app.notify(format!("Moved “{}” to the Trash", file_name(path)), time);
+        }
+        Err(e) => app.notify(format!("Could not delete the file: {e}"), time),
     }
 }
 

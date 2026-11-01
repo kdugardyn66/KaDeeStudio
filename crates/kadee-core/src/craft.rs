@@ -1,4 +1,4 @@
-//! Catalogue of the Crafting Apps that KadeeStudio will host: thirteen
+//! Catalogue of the Crafting Apps that KadeeStudio will host: fourteen
 //! ArtCraft apps plus SolidCraft (3D CAD, from Tangency Labs), in
 //! alphabetical order.
 //!
@@ -43,7 +43,7 @@ pub const CRAFT_PHASE: u8 = 7;
 ///
 /// `designcraft` and `effectcraft` follow VectorCraft's `.vectorcraft`
 /// project-file pattern and still need confirming against those apps.
-pub const CRAFT_APPS: [CraftApp; 14] = [
+pub const CRAFT_APPS: [CraftApp; 15] = [
     CraftApp {
         name: "CADCraft",
         id: "cadcraft",
@@ -178,6 +178,17 @@ pub const CRAFT_APPS: [CraftApp; 14] = [
         extensions: &["wav", "aif", "aiff", "flac", "mp3", "ogg", "m4a", "caf", "mid", "midi"],
     },
     CraftApp {
+        name: "TextureCraft",
+        id: "texturecraft",
+        aliases: &[],
+        bundle_id: "ai.storyteller.texturecraft",
+        purpose: "3D texture painting",
+        maker: ARTCRAFT,
+        badge: "TEX",
+        group: DocGroup::Graphics,
+        extensions: &["texturecraft"],
+    },
+    CraftApp {
         name: "VectorCraft",
         id: "vectorcraft",
         aliases: &[],
@@ -224,7 +235,7 @@ mod tests {
         let mut sorted = names.clone();
         sorted.sort_unstable();
         assert_eq!(names, sorted);
-        for n in ["CADCraft", "FigCraft", "SoundCraft"] {
+        for n in ["CADCraft", "FigCraft", "SoundCraft", "TextureCraft"] {
             assert!(names.contains(&n), "{n} missing");
         }
         assert_eq!(craft_for_extension("dwg").unwrap().name, "CADCraft");

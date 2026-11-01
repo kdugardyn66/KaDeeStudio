@@ -512,3 +512,10 @@ svg.md-i .cbar { stroke: var(--swatch, var(--icon-accent)); }
 .md-tpl-act { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: var(--ui-surface); border: 1px solid var(--ui-border-strong); color: var(--ui-icon); box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer; }
 .md-tpl-act:hover { background: var(--ui-hover); }
 .md-saveas-browser { margin-top: 10px; }
+
+/* KadeeStudio: "Do you want to keep this new document?" (MD.confirmClose) */
+.md-keep-grid { display: grid; grid-template-columns: 82px 1fr; gap: 10px 12px; align-items: center; margin-top: 16px; }
+.md-keep-grid > label { text-align: right; color: var(--ui-text-dim); }
+.md-keep-where { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.md-keep-where-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 10px; border: 1px solid var(--ui-border); border-radius: 6px; }
+.md-dialog .md-btn.md-danger.md-left { background: color-mix(in srgb, var(--ui-danger) 14%, transparent); }

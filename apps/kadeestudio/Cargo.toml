@@ -18,6 +18,8 @@ chrono.workspace = true
 rfd.workspace = true
 open.workspace = true
 directories.workspace = true
+# The Recent list's bin: deleted files go to the Trash / Recycle Bin.
+trash = "5"
 
 # Kadee Markdown: mdcraft's editor (ribbon, preview, slides, templates) in a web view inside
 # the Markdown tab. mdcraft runs on macOS and Linux only.
@@ -46,3 +48,7 @@ screenshot = ["glow", "eframe/__screenshot"]
 muda = { version = "0.17", default-features = false }
 # Edit › Paste reads the clipboard (already in the tree through egui-winit).
 arboard = { version = "3", default-features = false }
+# The Open panel's File type menu (mac_open.rs); the versions winit, wry and rfd already use.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"

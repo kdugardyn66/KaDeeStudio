@@ -16,13 +16,15 @@ pub mod settings;
 pub mod store;
 
 pub use craft::{CRAFT_APPS, CRAFT_PHASE, CraftApp, LAUNCHER_REPO, SOLIDCRAFT_REPO};
-pub use doctype::{DocGroup, DocKind, Opener, all_extensions};
-pub use files::{FileEntry, create_new_document, human_size, list_documents, now, relative_time};
+pub use doctype::{DocGroup, DocKind, Opener, all_extensions, open_dialog_types};
+pub use files::{
+    FileEntry, create_folder, create_new_document, human_size, list_documents, list_subfolders, now, relative_time, rename_folder,
+};
 pub use installed::{InstalledApp, Launch, detect_installed};
 pub use library::{Library, RecentEntry};
 pub use modules::ModuleKind;
 pub use office::{OfficeKind, create_office_document};
-pub use settings::{Settings, StoredShortcut, ThemePref};
+pub use settings::{OpenIn, Settings, StoredShortcut, ThemePref};
 pub use store::{HomeState, Store};
 
 /// The source code on GitHub.

@@ -61,6 +61,57 @@ pub fn list_documents(dir: &Path) -> Vec<FileEntry> {
     out
 }
 
+/// The visible folders directly inside `dir`, by name (hidden folders and bundles such as
+/// `.app` packages are left out).
+pub fn list_subfolders(dir: &Path) -> Vec<PathBuf> {
+    let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<PathBuf> = rd
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .filter(|p| {
+            p.file_name().is_some_and(|n| {
+                let n = n.to_string_lossy();
+                !n.starts_with('.') && !n.ends_with(".app") && !n.ends_with(".bundle")
+            })
+        })
+        .collect();
+    out.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default());
+    out
+}
+
+/// Create the folder `parent/name` and return its path; fails when it exists or the name is
+/// not a plain folder name.
+pub fn create_folder(parent: &Path, name: &str) -> io::Result<PathBuf> {
+    let name = valid_name(name)?;
+    let path = parent.join(name);
+    fs::create_dir(&path)?;
+    Ok(path)
+}
+
+/// Rename the folder `dir` to `name` in the same parent and return the new path.
+pub fn rename_folder(dir: &Path, name: &str) -> io::Result<PathBuf> {
+    let name = valid_name(name)?;
+    let parent = dir.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no parent folder"))?;
+    let to = parent.join(name);
+    if to == dir {
+        return Ok(to);
+    }
+    if to.exists() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("“{name}” already exists")));
+    }
+    fs::rename(dir, &to)?;
+    Ok(to)
+}
+
+fn valid_name(name: &str) -> io::Result<&str> {
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':']) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Use a name without / \\ or :"));
+    }
+    Ok(name)
+}
+
 /// Create `Untitled <kind>.<ext>` (numbered if taken) in `dir` and return its path.
 pub fn create_new_document(kind: ModuleKind, dir: &Path) -> io::Result<PathBuf> {
     let ext = kind
@@ -143,6 +194,23 @@ pub fn relative_time(then: u64, now: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subfolders_create_and_rename() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = create_folder(tmp.path(), "Clients").unwrap();
+        create_folder(tmp.path(), "archive").unwrap();
+        fs::create_dir(tmp.path().join(".hidden")).unwrap();
+        fs::write(tmp.path().join("note.md"), "x").unwrap();
+        let names: Vec<String> =
+            list_subfolders(tmp.path()).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, vec!["archive", "Clients"]);
+        assert!(create_folder(tmp.path(), "Clients").is_err());
+        assert!(create_folder(tmp.path(), "a/b").is_err());
+        let b = rename_folder(&a, "Customers").unwrap();
+        assert!(b.is_dir() && !a.exists());
+        assert!(rename_folder(&b, "archive").is_err());
+    }
 
     #[test]
     fn creates_numbered_documents() {

@@ -6,7 +6,7 @@ use kadee_core::CraftApp;
 use kadee_ui::Palette;
 use std::collections::HashMap;
 
-const ICONS: [(&str, &[u8]); 14] = [
+const ICONS: [(&str, &[u8]); 15] = [
     ("cadcraft", include_bytes!("../../assets/craft-icons/cadcraft.png")),
     ("deckcraft", include_bytes!("../../assets/craft-icons/deckcraft.png")),
     ("designcraft", include_bytes!("../../assets/craft-icons/designcraft.png")),
@@ -19,6 +19,7 @@ const ICONS: [(&str, &[u8]); 14] = [
     ("photocraft", include_bytes!("../../assets/craft-icons/photocraft.png")),
     ("solidcraft", include_bytes!("../../assets/craft-icons/solidcraft.png")),
     ("soundcraft", include_bytes!("../../assets/craft-icons/soundcraft.png")),
+    ("texturecraft", include_bytes!("../../assets/craft-icons/texturecraft.png")),
     ("vectorcraft", include_bytes!("../../assets/craft-icons/vectorcraft.png")),
     ("wordcraft", include_bytes!("../../assets/craft-icons/wordcraft.png")),
 ];

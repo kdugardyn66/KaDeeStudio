@@ -82,6 +82,67 @@
   };
 
   /**
+   * Closing in KadeeStudio, as in macOS Preview: a document that has a file closes without a
+   * question (changes that were not saved are dropped); a new document that was never saved
+   * asks whether to keep it — Save As name, Where, Format, and Delete / Cancel / Save.
+   * Resolves true when the document may close.
+   */
+  MD.confirmClose = async () => {
+    if (!doc.open) return true;
+    if (doc.saved) { discardAutosave(); return true; }
+    if (!E.get().trim()) { discardAutosave(); return true; }
+    const types = MD.saveTypes();
+    let dir = MD.app.documents;
+    const stem = MD.suggestName().replace(/\.[\w]+$/, '');
+    const nameInput = h('input.md-input.md-keep-name', { value: stem + '.' + types[0].ext, spellcheck: false });
+    const where = h('span.md-keep-where-name', MD.basename(dir) || dir);
+    const whereRow = h('div.md-keep-where', where, h('button.md-btn', { type: 'button', onclick: async () => {
+      try {
+        const d = await MD.native('folder-dialog', { title: 'Where', dir });
+        if (d) { dir = d; where.textContent = MD.basename(d) || d; where.title = d; }
+      } catch (e) { MD.toast(e.message); }
+    } }, 'Choose…'));
+    where.title = dir;
+    const format = MD.select(types.map((t, i) => [i, t.label]), 0);
+    format.addEventListener('change', () => {
+      const t = types[+format.value];
+      nameInput.value = nameInput.value.replace(/\.[\w]+$/, '') + '.' + t.ext;
+      whereRow.style.display = t.dir ? 'none' : '';
+    });
+    const target = () => {
+      const t = types[+format.value];
+      let n = nameInput.value.trim().replace(/[\\/:*?"<>|]+/g, ' ').trim() || stem;
+      n = n.replace(/\.[\w]+$/, '') + '.' + t.ext;
+      return MD.join(t.dir || dir, n);
+    };
+    const body = h('div.md-keep',
+      h('p.md-dlg-text', h('b', 'Do you want to keep this new document “' + doc.name.replace(/\.md$/, '') + '”?')),
+      h('p.md-hint', 'You can choose to save your changes or delete this document immediately. You can’t undo this action.'),
+      h('div.md-keep-grid',
+        h('label', 'Save As:'), nameInput,
+        h('label', 'Where:'), whereRow,
+        h('label', 'Format:'), format));
+    const v = await MD.dialog({
+      title: 'Kadee Markdown', width: 520, body, dismiss: false,
+      buttons: [
+        { label: 'Delete', value: 'delete', left: true, danger: true },
+        { label: 'Cancel', value: null },
+        { label: 'Save', value: 'save', primary: true, validate: async () => {
+          const p = target();
+          let exists = false;
+          try { exists = (await MD.api('/api/file/stat?path=' + encodeURIComponent(p))).exists; } catch (e) { /* ignore */ }
+          if (exists && !(await MD.confirm('Replace', '“' + MD.basename(p) + '” already exists. Replace it?', 'Replace'))) return false;
+          return await MD.saveTo(p);
+        } },
+      ],
+      onOpen: () => setTimeout(() => { nameInput.focus(); nameInput.setSelectionRange(0, nameInput.value.lastIndexOf('.')); }, 10),
+    });
+    if (v === 'save') return true;
+    if (v === 'delete') { discardAutosave(); return true; }
+    return false;
+  };
+
+  /**
    * The template text with the default fonts from Options added to its front matter
    * (mainfont, monofont, fontsize; keys the template sets itself are kept). Presentations get
    * the fonts but not the size: slides size their text themselves.
@@ -794,7 +855,8 @@
     /** The window's close button: ask about unsaved changes, then let the shell quit. */
     async requestClose() {
       if (MD.presenting()) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      if (await MD.confirmDiscard()) { discardAutosave(); MD.native('quit', {}); }
+      // KadeeStudio closes like macOS Preview (see MD.confirmClose)
+      if (await MD.confirmClose()) { discardAutosave(); MD.native('quit', {}); }
     },
     /** Files dropped on the window or passed on the command line. */
     async dropped(paths) {

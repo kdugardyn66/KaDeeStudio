@@ -48,12 +48,71 @@ pub fn page(app: &mut KadeeApp, ui: &mut Ui) {
             page_title(ui, "Starred", "Documents you marked with a star");
             documents(app, ui, "");
         }
+        // a folder from the sidebar's tree: quick start (new documents go into it), its
+        // sub-folders, then its documents — as in GenOffice
         _ => {
-            let dir = app.state.settings.documents_dir.display().to_string();
-            page_title(ui, "KadeeStudio folder", &dir);
+            let dir = app.shown_folder();
+            folder_heading(app, ui, &dir);
+            ui.add_space(14.0);
+            quick_start(app, ui);
+            ui.add_space(22.0);
             documents(app, ui, "");
         }
     });
+}
+
+/// The folder's name, its path as clickable steps from the root it belongs to, and its actions.
+fn folder_heading(app: &mut KadeeApp, ui: &mut Ui, dir: &std::path::Path) {
+    let pal = Palette::of(ui);
+    let roots = app.folder_roots();
+    let docs_dir = app.state.settings.documents_dir.clone();
+    let root = roots.iter().filter(|r| dir.starts_with(r)).max_by_key(|r| r.components().count()).cloned();
+    let name = crate::app::file_name(dir);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(name).size(26.0).strong().color(pal.text));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if root.as_deref() == Some(dir) && *dir != docs_dir && ui.button("Remove from list").clicked() {
+                app.send(Command::UnpinFolder(dir.to_path_buf()));
+            }
+            if ui.button("Show in folder").clicked() {
+                app.send(Command::OpenExternally(dir.to_path_buf()));
+            }
+            if dir.is_dir() && ui.button("New folder").clicked() {
+                app.send(Command::NewFolder(dir.to_path_buf()));
+            }
+        });
+    });
+    // KadeeStudio › Clients › Contracts
+    match root {
+        Some(root) if root.as_path() != dir => {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let mut acc = root.clone();
+                let first = crate::app::file_name(&root);
+                let mut steps = vec![(first, root.clone())];
+                if let Ok(rest) = dir.strip_prefix(&root) {
+                    for part in rest.components() {
+                        acc = acc.join(part);
+                        steps.push((part.as_os_str().to_string_lossy().into_owned(), acc.clone()));
+                    }
+                }
+                let n = steps.len();
+                for (i, (label, path)) in steps.into_iter().enumerate() {
+                    if i + 1 == n {
+                        ui.label(RichText::new(label).size(13.5).color(pal.text_muted));
+                    } else {
+                        if ui.link(RichText::new(label).size(13.5)).clicked() {
+                            app.send(Command::ShowFolder(path));
+                        }
+                        ui.label(RichText::new("›").size(13.5).color(pal.text_faint));
+                    }
+                }
+            });
+        }
+        _ => {
+            ui.label(RichText::new(dir.display().to_string()).size(13.5).color(pal.text_muted));
+        }
+    }
 }
 
 pub fn page_title(ui: &mut Ui, title: &str, sub: &str) {
@@ -227,7 +286,17 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
 
 fn documents(app: &mut KadeeApp, ui: &mut Ui, title: &str) {
     let pal = Palette::of(ui);
-    ui.horizontal(|ui| {
+    // Narrow (the KaDee AI pane is open): the search box gets a row of its own.
+    let one_row = ui.available_width() >= 1000.0;
+    let search_row = |app: &mut KadeeApp, ui: &mut Ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if icon_button(ui, Icon::Refresh, "Refresh").clicked() {
+                app.send(Command::Refresh);
+            }
+            ui.scope(|ui| search_box(ui, &mut app.search));
+        });
+    };
+    ui.horizontal_wrapped(|ui| {
         if !title.is_empty() {
             ui.label(RichText::new(title).size(16.0).strong().color(pal.text));
             ui.add_space(8.0);
@@ -240,16 +309,24 @@ fn documents(app: &mut KadeeApp, ui: &mut Ui, title: &str) {
                 app.filter = if app.filter == Some(group) { None } else { Some(group) };
             }
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if icon_button(ui, Icon::Refresh, "Refresh").clicked() {
-                app.send(Command::Refresh);
-            }
-            ui.scope(|ui| search_box(ui, &mut app.search));
-        });
+        if one_row {
+            search_row(app, ui);
+        }
     });
+    if !one_row {
+        ui.add_space(6.0);
+        ui.horizontal(|ui| search_row(app, ui));
+    }
     ui.add_space(8.0);
     let entries = app.visible_entries();
-    table::file_table(app, ui, &entries);
+    // a folder page lists its sub-folders first (the search applies to their names too)
+    let folders: Vec<std::path::PathBuf> = if app.page == Page::Folder {
+        let q = app.search.trim().to_lowercase();
+        app.folder_subdirs.iter().filter(|d| q.is_empty() || crate::app::file_name(d).to_lowercase().contains(&q)).cloned().collect()
+    } else {
+        Vec::new()
+    };
+    table::file_table(app, ui, &folders, &entries);
 }
 
 fn search_box(ui: &mut Ui, text: &mut String) {

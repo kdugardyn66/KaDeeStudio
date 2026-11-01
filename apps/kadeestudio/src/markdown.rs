@@ -206,6 +206,11 @@ impl Editor {
 
 impl Drop for Editor {
     fn drop(&mut self) {
+        // a dropped child view does not always disappear by itself (GTK): hide it first
+        if let Some(v) = self.view.take() {
+            let _ = v.set_visible(false);
+            let _ = v.focus_parent();
+        }
         self.core.shutdown();
     }
 }
@@ -374,6 +379,18 @@ impl Markdown {
             }
         }
         true
+    }
+
+    /// Run the editor command `id` (`file.save`, `file.saveAs`, `file.print`) in the tab of
+    /// `path`. False when that tab has no editor that has booted.
+    pub fn run_command(&self, path: &Path, id: &str) -> bool {
+        match self.editors.get(path) {
+            Some(e) if e.ready && e.view.is_some() => {
+                e.eval(&format!("window.MD && MD.run && MD.run({})", json!(id)));
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Insert `text` at the cursor of the Markdown tab `path` (an answer from KaDee AI).
@@ -618,6 +635,17 @@ fn handle(app: &mut KadeeApp, md: &mut Markdown, path: &Path, body: &str, ctx: &
         }
         // The page is still here after being asked to close: Cancel was chosen.
         "kadee-close-done" => md.quitting = false,
+        // "Where" in the keep-new-document question (MD.confirmClose)
+        "folder-dialog" => {
+            let mut d = rfd::FileDialog::new().set_title(msg["title"].as_str().unwrap_or("Where"));
+            if let Some(dir) = msg["dir"].as_str().map(PathBuf::from).filter(|d| d.is_dir()) {
+                d = d.set_directory(dir);
+            }
+            let picked = d.pick_folder();
+            if let Some(e) = md.editors.get(path) {
+                e.reply(id, picked.map(|p| json!(p.to_string_lossy())).unwrap_or(Value::Null), None);
+            }
+        }
         "open-dialog" => {
             let mut d = rfd::FileDialog::new().set_title(msg["title"].as_str().unwrap_or("Open"));
             d = add_filters(d, &msg["filters"]);

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1 — 2026-11-01
+
+Start screen, macOS menu and closing documents.
+
+- **macOS File menu**: New (⌘N, the New document page), Open… (⌘O), **Recent ▸** (the ten most recent documents, then Recent…), **Save** (⌘S; Save As… for a document that was never saved), **Save As…** (⌥⌘S), Close (⌘W), **Print…** (⌘P, the system print dialog). Save, Save As… and Print… work in a Kadee Markdown tab and are greyed out elsewhere. **Help › License Agreement ▸ MIT / Apache-2.0** shows the license inside KadeeStudio.
+- **Closing like macOS Preview**: a new document that was never saved asks *Do you want to keep this new document?* — Save As (name), Where (folder), Format (Markdown file or template), and **Delete** / **Cancel** / **Save**. A document that has a file closes without a question; changes that were not saved are dropped.
+- **Start screen sidebar**: Home, **New**, **Open…**, Recent, Starred, Crafting Apps, the KadeeStudio folder, Working locally, Settings. KaDee AI left the sidebar.
+- **New** opens the New document page in the middle pane instead of a popup (Cmd+N, then a letter, still works).
+- **Open…** has a File type choice: All supported documents, Markdown, PDF, Office, Graphics, Media, CAD, Dashboard, Report (a File type menu under the macOS Open panel).
+- **Recent**: a bin after the star. A file that no longer exists is removed from the list; an existing file asks first and goes to the Trash. **Starred** drops files that no longer exist. Delete… is also in the right-click menu.
+- **Folders, as in GenOffice**: the sidebar's FOLDERS is a folder tree — the KadeeStudio folder, then the folders you add with **Add folder…** (kept in `home.json`, nothing is copied or moved). Chevrons open folders to show the folders inside (what is open is remembered); a folder that is gone shows *Not available*. Clicking a folder shows it in the middle pane: its path as clickable steps, the quick-start cards (new documents go into that folder), its sub-folders first and then its documents, or *This folder is empty*. The **…** button and the right-click menu offer *New subfolder*, *Rename…*, *Show in folder*, *Delete folder…* (to the Trash, after asking) and *Remove from list* for added folders; **+** makes a new folder in the folder on screen. Recent and Starred follow a renamed folder.
+- The documents folder is shown under its own name everywhere on the start screen (the folder tree, its page, the New document page and Settings): change it to `~/Work` and it reads *Work*.
+- **Crafting Apps**: TextureCraft (3D texture painting) joins, with its icon and `.texturecraft` files.
+- **Settings** opens in the middle pane instead of a popup. General has two new options, *Open each module in a new Tab/Window* and *Open each file in a new Tab/Window*; separate windows come in a later version, so Tab is the choice for now (an open document is focused, not opened twice). New sections **License — MIT** and **License — Apache-2.0**; *MIT* and *Apache-2.0* in About link to them.
+- **KaDee AI** opens as a pane on the right everywhere, also on Home (a general chat there), from the ✦ button, Cmd+J or Cmd+Shift+A.
+- New commands with shortcuts: `file.save` (Cmd+S), `file.save_as` (Option+Cmd+S), `file.print` (Cmd+P), plus `library.delete` and `home.show.new`. If you changed shortcuts before, add them in Settings › Keyboard (or Reset to defaults).
+- Fixes: the editor of a closed tab no longer stays on screen (Linux); the document list puts the search box on its own row when the KaDee AI pane makes it narrow; no unused-import warning on macOS.
+
 ## 0.3.0 — 2026-11-01
 
 Phase 2: Kadee Markdown.

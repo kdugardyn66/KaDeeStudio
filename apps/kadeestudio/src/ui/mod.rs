@@ -55,26 +55,32 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
             .show(ui, |ui| sidebar(app, ui));
     }
 
-    if app.active > 0
-        && app.ai_pane
-        && let Some(path) = app.tabs.get(app.active - 1).cloned()
-    {
+    // KaDee AI on the right: about the open file in a file tab, a general chat on Home.
+    if app.ai_pane {
+        let file = if app.active > 0 { app.tabs.get(app.active - 1).cloned() } else { None };
         egui::Panel::right("ai_pane")
             .exact_size(400.0)
             .resizable(false)
             .frame(egui::Frame::new().fill(pal.canvas).stroke(Stroke::new(1.0, pal.border)))
             .show(ui, |ui| {
                 ai_pane_header(app, ui);
-                ai_chat::pane(app, ui, &path);
+                match &file {
+                    Some(path) => ai_chat::pane(app, ui, path),
+                    None => ai_chat::home_pane(app, ui),
+                }
             });
     }
 
     egui::CentralPanel::default().frame(egui::Frame::new().fill(pal.canvas)).show(ui, |ui| {
         if app.active == 0 {
+            if app.settings_window.is_some() {
+                settings::page(app, ui);
+                return;
+            }
             match app.page {
-                Page::Home | Page::Recent | Page::Starred | Page::Folder => home::page(app, ui),
+                Page::Home | Page::Recent | Page::Starred | Page::Folder | Page::Ai => home::page(app, ui),
+                Page::New => keys::new_page(app, ui),
                 Page::CraftApps => pages::craft_apps(app, ui),
-                Page::Ai => ai_chat::page(app, ui),
             }
         } else if let Some(path) = app.tabs.get(app.active - 1).cloned() {
             #[cfg(unix)]
@@ -86,8 +92,8 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
         }
     });
 
-    keys::new_document_picker(app, ui);
-    settings::window(app, ui);
+    delete_dialog(app, ui);
+    folder_dialog(app, ui);
     keys::sequence_hint(app, ui);
     toast(app, ui);
 }
@@ -163,13 +169,12 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
                 Some(k) => format!("KaDee AI ({k})"),
                 None => "KaDee AI".to_string(),
             };
-            let on = app.active > 0 && app.ai_pane;
             let ai = icon_button(ui, Icon::Sparkles, &tip);
-            if on {
+            if app.ai_pane {
                 ui.painter().rect_stroke(ai.rect, CornerRadius::same(6), Stroke::new(1.0, pal.accent), StrokeKind::Inside);
             }
             if ai.clicked() {
-                app.send(if app.active == 0 { Command::ShowPage(Page::Ai) } else { Command::ToggleAiPane });
+                app.send(Command::ToggleAiPane);
             }
             let (icon, tip) = match app.state.settings.theme {
                 ThemePref::System => (Icon::Auto, "Theme: System — click for Light"),
@@ -310,32 +315,64 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
     let docs_n = app.docs.len();
     let go = |app: &mut KadeeApp, page| app.send(Command::ShowPage(page));
 
-    if nav_item(ui, Icon::Home, "Home", None, app.page == Page::Home) {
+    // A page is selected unless Settings covers the middle pane.
+    let on = |p: Page| app.settings_window.is_none() && app.page == p;
+    let (home, new, recent, starred, craft, folder) =
+        (on(Page::Home) || on(Page::Ai), on(Page::New), on(Page::Recent), on(Page::Starred), on(Page::CraftApps), on(Page::Folder));
+    if nav_item(ui, Icon::Home, "Home", None, home) {
         go(app, Page::Home);
     }
-    if nav_item(ui, Icon::Clock, "Recent", Some(recent_n), app.page == Page::Recent) {
+    if nav_item(ui, Icon::NewDoc, "New", None, new) {
+        go(app, Page::New);
+    }
+    if nav_item(ui, Icon::Open, "Open…", None, false) {
+        app.send(Command::OpenDialog);
+    }
+    if nav_item(ui, Icon::Clock, "Recent", Some(recent_n), recent) {
         go(app, Page::Recent);
     }
-    if nav_item(ui, Icon::Star, "Starred", Some(starred_n), app.page == Page::Starred) {
+    if nav_item(ui, Icon::Star, "Starred", Some(starred_n), starred) {
         go(app, Page::Starred);
     }
-    if nav_item(ui, Icon::Sparkles, "KaDee AI", None, app.page == Page::Ai) {
-        go(app, Page::Ai);
-    }
-    if nav_item(ui, Icon::Grid, "Crafting Apps", Some(CRAFT_APPS.len()), app.page == Page::CraftApps) {
+    if nav_item(ui, Icon::Grid, "Crafting Apps", Some(CRAFT_APPS.len()), craft) {
         go(app, Page::CraftApps);
     }
 
     ui.add_space(14.0);
-    ui.label(RichText::new("FOLDERS").size(11.0).color(pal.text_faint));
+    // FOLDERS, as in GenOffice: the KadeeStudio folder and the folders you added, as a tree
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("FOLDERS").size(11.0).color(pal.text_faint));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            let target = if app.page == Page::Folder { app.shown_folder() } else { app.state.settings.documents_dir.clone() };
+            if small_icon_button(ui, Icon::Plus, &format!("New folder in “{}”", crate::app::file_name(&target))) {
+                app.send(Command::NewFolder(target));
+            }
+            if small_icon_button(ui, Icon::FolderAdd, "Add folder…") {
+                app.send(Command::PinFolder);
+            }
+        });
+    });
     ui.add_space(2.0);
-    if nav_item(ui, Icon::Folder, "KadeeStudio", Some(docs_n), app.page == Page::Folder) {
-        go(app, Page::Folder);
-    }
+    // a long tree scrolls, leaving room for the status card and Settings
+    egui::ScrollArea::vertical()
+        .id_salt("folder-tree")
+        .max_height((ui.available_height() - 120.0).max(40.0))
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let docs_dir = app.state.settings.documents_dir.clone();
+            for root in app.folder_roots() {
+                let removable = root != docs_dir;
+                let label = crate::app::file_name(&root);
+                tree_node(app, ui, &root, &label, 0, Some(removable), folder);
+            }
+        });
+    let _ = docs_n;
 
     // Bottom: collaboration status + settings
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-        if nav_item(ui, Icon::Gear, "Settings", None, app.settings_window.is_some()) {
+        if nav_item(ui, Icon::Gear, "Settings", None, app.settings_window.is_some() && app.active == 0) {
             app.send(Command::OpenSettings(kadee_commands::SettingsSection::General));
         }
         ui.add_space(4.0);
@@ -354,8 +391,126 @@ fn sidebar(app: &mut KadeeApp, ui: &mut Ui) {
     });
 }
 
+/// A 20×20 icon button for a section header.
+fn small_icon_button(ui: &mut Ui, icon: Icon, tip: &str) -> bool {
+    let pal = Palette::of(ui);
+    let (r, resp) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_filled(r, CornerRadius::same(5), pal.surface_hover);
+    }
+    icons::paint(ui.painter(), r.shrink(3.0), icon, if resp.hovered() { pal.text } else { pal.text_faint });
+    resp.on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+}
+
+/// One folder in the sidebar's tree and, when it is open, the folders inside it.
+/// `root`: `Some(removable)` for a root (the KadeeStudio folder is not removable).
+fn tree_node(app: &mut KadeeApp, ui: &mut Ui, dir: &std::path::Path, label: &str, depth: usize, root: Option<bool>, on_folder_page: bool) {
+    let pal = Palette::of(ui);
+    let available = dir.is_dir();
+    let open = available && app.is_expanded(dir);
+    let children = if available { app.subfolders(dir) } else { Vec::new() };
+    let selected = on_folder_page && app.shown_folder() == dir;
+
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+    let indent = 4.0 + depth as f32 * 14.0;
+    let chevron = Rect::from_center_size(pos2(rect.min.x + indent + 8.0, rect.center().y), Vec2::splat(16.0));
+    let chevron_resp = ui.interact(chevron, resp.id.with("chevron"), Sense::click());
+    let more = Rect::from_center_size(pos2(rect.max.x - 14.0, rect.center().y), Vec2::splat(22.0));
+    let more_resp = ui.interact(more, resp.id.with("more"), Sense::click());
+    let hovered = resp.hovered() || chevron_resp.hovered() || more_resp.hovered();
+    let menu_open = egui::Popup::is_id_open(ui.ctx(), more_resp.id.with("menu"));
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(rect, CornerRadius::same(7), pal.accent_soft);
+    } else if hovered || menu_open {
+        p.rect_filled(rect, CornerRadius::same(7), pal.surface_hover);
+    }
+    if available && (!children.is_empty() || root.is_some()) {
+        let icon = if open { Icon::Chevron } else { Icon::ChevronRight };
+        icons::paint(p, chevron.shrink(3.0), icon, if chevron_resp.hovered() { pal.text } else { pal.text_faint });
+    }
+    let fg = if selected { pal.accent } else { pal.text_muted };
+    icons::paint(p, Rect::from_center_size(pos2(chevron.max.x + 10.0, rect.center().y), Vec2::splat(15.0)), Icon::Folder, fg);
+    let name_x = chevron.max.x + 24.0;
+    let max_chars = (((more.min.x - name_x) / 7.2).max(4.0)) as usize;
+    p.text(
+        pos2(name_x, rect.center().y),
+        Align2::LEFT_CENTER,
+        truncate(label, max_chars),
+        FontId::proportional(13.5),
+        if available { pal.text } else { pal.text_faint },
+    );
+    if !available && !(hovered || menu_open) {
+        p.text(pos2(rect.max.x - 8.0, rect.center().y), Align2::RIGHT_CENTER, "Not available", FontId::proportional(11.0), pal.text_faint);
+    }
+    if hovered || menu_open {
+        if more_resp.hovered() || menu_open {
+            p.rect_filled(more, CornerRadius::same(5), pal.border);
+        }
+        icons::paint(p, more.shrink(5.0), Icon::MoreDots, pal.text_muted);
+    }
+
+    // the same menu from "…" and from a right-click
+    let menu = |app: &mut KadeeApp, ui: &mut Ui| {
+        ui.set_min_width(190.0);
+        let mut item_cmd: Option<Command> = None;
+        let mut item = |ui: &mut Ui, label: &str, cmd: Command| {
+            if ui.button(label).clicked() {
+                app.send(cmd);
+                ui.close();
+            }
+        };
+        if available {
+            item(ui, "New subfolder", Command::NewFolder(dir.to_path_buf()));
+        }
+        if root.is_none() {
+            item(ui, "Rename…", Command::RenameFolder(dir.to_path_buf()));
+        }
+        if available {
+            item(ui, "Show in folder", Command::OpenExternally(dir.to_path_buf()));
+        }
+        if root.is_none() {
+            ui.separator();
+            let danger = Palette::of(ui).danger;
+            if ui.button(RichText::new("Delete folder…").color(danger)).clicked() {
+                item_cmd = Some(Command::DeleteFolder(dir.to_path_buf()));
+                ui.close();
+            }
+        }
+        if root == Some(true) {
+            ui.separator();
+            item(ui, "Remove from list", Command::UnpinFolder(dir.to_path_buf()));
+        }
+        if let Some(c) = item_cmd {
+            app.send(c);
+        }
+    };
+    egui::Popup::menu(&more_resp).id(more_resp.id.with("menu")).show(|ui| menu(app, ui));
+    let resp = if root.is_some() { resp.on_hover_text(dir.display().to_string()) } else { resp };
+    resp.context_menu(|ui| menu(app, ui));
+    if chevron_resp.clicked() && available {
+        app.send(Command::ToggleFolder(dir.to_path_buf()));
+    } else if resp.clicked() && available && !more_resp.clicked() {
+        app.send(Command::ShowFolder(dir.to_path_buf()));
+    } else if resp.double_clicked() && available {
+        app.send(Command::ToggleFolder(dir.to_path_buf()));
+    }
+
+    if open {
+        for child in children {
+            let name = crate::app::file_name(&child);
+            tree_node(app, ui, &child, &name, depth + 1, None, on_folder_page);
+        }
+    }
+}
+
 /// A sidebar row; returns true when clicked.
 fn nav_item(ui: &mut Ui, icon: Icon, label: &str, count: Option<usize>, selected: bool) -> bool {
+    nav_row(ui, icon, label, count, selected, true).clicked()
+}
+
+/// A sidebar row's response (for a right-click menu); `present` false greys it (a missing folder).
+fn nav_row(ui: &mut Ui, icon: Icon, label: &str, count: Option<usize>, selected: bool, present: bool) -> egui::Response {
     let pal = Palette::of(ui);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
     let p = ui.painter();
@@ -366,11 +521,125 @@ fn nav_item(ui: &mut Ui, icon: Icon, label: &str, count: Option<usize>, selected
     }
     let fg = if selected { pal.accent } else { pal.text_muted };
     icons::paint(p, Rect::from_center_size(pos2(rect.min.x + 18.0, rect.center().y), Vec2::splat(16.0)), icon, fg);
-    p.text(pos2(rect.min.x + 36.0, rect.center().y), Align2::LEFT_CENTER, label, FontId::proportional(14.0), pal.text);
+    let label = truncate(label, 22);
+    p.text(
+        pos2(rect.min.x + 36.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(14.0),
+        if present { pal.text } else { pal.text_faint },
+    );
     if let Some(n) = count {
         p.text(pos2(rect.max.x - 10.0, rect.center().y), Align2::RIGHT_CENTER, n.to_string(), FontId::proportional(12.0), pal.text_faint);
     }
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// New folder, Rename folder and Delete folder.
+fn folder_dialog(app: &mut KadeeApp, ui: &mut Ui) {
+    use crate::app::FolderDialog;
+    let Some(mut dialog) = app.folder_dialog.clone() else { return };
+    let mut done: Option<bool> = None; // Some(true) = do it, Some(false) = cancel
+    let resp = egui::Modal::new(egui::Id::unique("kadee-folder-dialog")).show(ui.ctx(), |ui| {
+        let pal = Palette::of(ui);
+        ui.set_width(440.0);
+        let (title, hint, action) = match &dialog {
+            FolderDialog::New { parent, .. } => ("New folder".to_string(), format!("In “{}”", crate::app::file_name(parent)), "Create"),
+            FolderDialog::Rename { dir, .. } => ("Rename folder".to_string(), dir.display().to_string(), "Rename"),
+            FolderDialog::Delete { dir } => (
+                format!("Delete “{}”?", crate::app::file_name(dir)),
+                "The folder and everything inside it are moved to the Trash.".to_string(),
+                "Move to Trash",
+            ),
+        };
+        ui.label(RichText::new(title).size(18.0).strong().color(pal.text));
+        ui.add_space(2.0);
+        ui.label(RichText::new(hint).size(12.5).color(pal.text_muted));
+        ui.add_space(12.0);
+        if let FolderDialog::New { name, .. } | FolderDialog::Rename { name, .. } = &mut dialog {
+            let mut out = egui::TextEdit::singleline(name).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 7)).show(ui);
+            // the first frame: focus the name with all of it selected, ready to type over
+            let fresh = egui::Id::unique("kadee-folder-dialog-fresh");
+            if !ui.data(|d| d.get_temp::<bool>(fresh).unwrap_or(false)) {
+                ui.data_mut(|d| d.insert_temp(fresh, true));
+                out.response.request_focus();
+                let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(name.chars().count()));
+                out.state.cursor.set_char_range(Some(all));
+                out.state.store(ui.ctx(), out.response.id);
+            }
+            if out.response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                done = Some(true);
+            }
+            ui.add_space(12.0);
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let danger = matches!(dialog, FolderDialog::Delete { .. });
+            let b = egui::Button::new(RichText::new(action).color(Color32::WHITE)).fill(if danger { pal.danger } else { pal.accent });
+            if ui.add(b).clicked() {
+                done = Some(true);
+            }
+            if ui.button("Cancel").clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    let t = ui.input(|i| i.time);
+    if done.is_some() {
+        ui.data_mut(|d| d.remove::<bool>(egui::Id::unique("kadee-folder-dialog-fresh")));
+    }
+    match done {
+        None => app.folder_dialog = Some(dialog),
+        Some(false) => app.folder_dialog = None,
+        Some(true) => {
+            let ok = match &dialog {
+                FolderDialog::New { parent, name } => app.create_folder(parent, name, t),
+                FolderDialog::Rename { dir, name } => app.rename_folder(dir, name, t),
+                FolderDialog::Delete { dir } => {
+                    app.trash_folder(dir, t);
+                    true
+                }
+            };
+            // a name that did not work keeps the dialog open to try another
+            app.folder_dialog = if ok { None } else { Some(dialog) };
+        }
+    }
+}
+
+/// "Move to Trash?" for the Recent list's bin.
+fn delete_dialog(app: &mut KadeeApp, ui: &mut Ui) {
+    let Some(path) = app.delete_confirm.clone() else { return };
+    let mut answer: Option<bool> = None;
+    let resp = egui::Modal::new(egui::Id::unique("kadee-delete")).show(ui.ctx(), |ui| {
+        let pal = Palette::of(ui);
+        ui.set_width(440.0);
+        ui.label(RichText::new(format!("Delete “{}”?", crate::app::file_name(&path))).size(18.0).strong().color(pal.text));
+        ui.add_space(4.0);
+        ui.label(RichText::new("The file is moved to the Trash and removed from Recent and Starred.").color(pal.text_muted));
+        ui.label(RichText::new(path.display().to_string()).size(12.0).monospace().color(pal.text_faint));
+        ui.add_space(14.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let del = egui::Button::new(RichText::new("Move to Trash").color(Color32::WHITE)).fill(pal.danger);
+            if ui.add(del).clicked() {
+                answer = Some(true);
+            }
+            if ui.button("Cancel").clicked() {
+                answer = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && answer.is_none() {
+        answer = Some(false);
+    }
+    if let Some(yes) = answer {
+        app.delete_confirm = None;
+        if yes {
+            let t = ui.input(|i| i.time);
+            crate::app::trash_file(app, &path, t);
+        }
+    }
 }
 
 fn toast(app: &mut KadeeApp, ui: &mut Ui) {

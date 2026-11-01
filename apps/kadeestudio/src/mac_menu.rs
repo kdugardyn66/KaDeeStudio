@@ -4,12 +4,14 @@
 //! - **KadeeStudio**: About (opens Settings › About, so the menu bar and the
 //!   Settings window show the same information), Check for Updates…, Settings…,
 //!   Services, Hide, Hide Others, Show All, Quit.
-//! - **File**: New document…, New ▸ (every document type), Open…, Close, and
-//!   Save, Save As…, Print… (greyed out until the editors arrive).
+//! - **File**: New (the New document page), Open…, Recent ▸ (the ten most recent documents
+//!   and Recent…), Save, Save As…, Close and Print…. Save, Save As… and Print… work in a
+//!   tab with an editor (Kadee Markdown) and are greyed out elsewhere.
 //! - **Edit**: Undo, Redo, Cut, Copy, Paste, Select All. macOS adds AutoFill
 //!   and Emoji & Symbols itself.
 //! - **Window**: Minimize, Zoom, Bring All to Front; macOS adds the tiling items.
-//! - **Help**: Acknowledgments, License Agreement, KadeeStudio Help.
+//! - **Help**: Acknowledgments, License Agreement ▸ (MIT, Apache-2.0: shown in Settings),
+//!   KadeeStudio Help.
 //!
 //! Shortcuts shown in the menus follow the key map: an item shows the first
 //! single-key shortcut its command has (`⌘O`), and none when the shortcut is a
@@ -22,11 +24,14 @@
 //! The menu is installed when the app starts, which is after winit has set up
 //! its default menu, so this one replaces it.
 
-use kadee_commands::{Chord, Command, Keymap, SettingsSection};
-use kadee_core::{ModuleKind, OfficeKind};
+use kadee_commands::{Chord, Command, Keymap, Page, SettingsSection};
 use muda::accelerator::{Accelerator, Code, Modifiers};
 use muda::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use std::collections::HashMap;
+use std::path::PathBuf;
+
+/// How many documents File › Recent lists.
+pub const RECENT_IN_MENU: usize = 10;
 use std::sync::mpsc::{Receiver, channel};
 
 /// Where "Check for Updates…" and the Help items go (the project's GitHub page).
@@ -60,6 +65,13 @@ pub struct MacMenu {
     shown: Vec<Option<Accelerator>>,
     suspended: bool,
     events: Receiver<MenuId>,
+    /// Save, Save As… and Print…: on only in a tab with an editor.
+    doc_items: Vec<MenuItem>,
+    doc_enabled: bool,
+    /// File › Recent and the documents it lists now.
+    recent_menu: Submenu,
+    recent_shown: Option<Vec<PathBuf>>,
+    recent_ids: Vec<MenuId>,
 }
 
 /// Collects items while the menus are built.
@@ -120,33 +132,24 @@ impl MacMenu {
             .ok()?;
 
         // File
-        let new_document = b.command("New document…", Command::NewDocumentPicker);
-        let new_menu = Submenu::new("New", true);
-        let md = b.command("Markdown document", Command::NewDocument(ModuleKind::Markdown));
-        let pdf = b.command("PDF document", Command::NewDocument(ModuleKind::Pdf));
-        let dash = b.command("Dashboard", Command::NewDocument(ModuleKind::Dashboard));
-        let report = b.command("Report", Command::NewDocument(ModuleKind::Report));
-        let word = b.command("Word document", Command::NewOffice(OfficeKind::Word));
-        let sheet = b.command("Spreadsheet", Command::NewOffice(OfficeKind::Spreadsheet));
-        let deck = b.command("Slide deck", Command::NewOffice(OfficeKind::SlideDeck));
-        new_menu.append_items(&[&md, &pdf, &dash, &report, &PredefinedMenuItem::separator(), &word, &sheet, &deck]).ok()?;
+        let new_document = b.command("New", Command::NewDocumentPicker);
         let open = b.command("Open…", Command::OpenDialog);
+        let recent_menu = Submenu::new("Recent", true);
+        let save = b.command("Save", Command::Save);
+        let save_as = b.command("Save As…", Command::SaveAs);
         let close = b.command("Close", Command::CloseActiveTab);
-        // Greyed out until the editors exist; the shortcuts show what they will be.
-        let save = MenuItem::new("Save", false, Some(cmd(Code::KeyS)));
-        let save_as = MenuItem::new("Save As…", false, Some(Accelerator::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyS)));
-        let print = MenuItem::new("Print…", false, Some(cmd(Code::KeyP)));
+        let print = b.command("Print…", Command::Print);
         let file_menu = Submenu::new("File", true);
         file_menu
             .append_items(&[
                 &new_document,
-                &new_menu,
                 &open,
+                &recent_menu,
                 &PredefinedMenuItem::separator(),
-                &close,
                 &save,
                 &save_as,
                 &PredefinedMenuItem::separator(),
+                &close,
                 &print,
             ])
             .ok()?;
@@ -174,11 +177,10 @@ impl MacMenu {
 
         // Help
         let thanks = b.command("Acknowledgments", Command::OpenSettings(SettingsSection::About));
-        let license = b.fixed(
-            "License Agreement",
-            Action::Run(url(&format!("{REPO}/blob/main/LICENSE-MIT"))),
-            Accelerator::new(Some(Modifiers::SUPER | Modifiers::ALT), Code::KeyL),
-        );
+        let license = Submenu::new("License Agreement", true);
+        let mit = b.command("MIT", Command::OpenSettings(SettingsSection::LicenseMit));
+        let apache = b.command("Apache-2.0", Command::OpenSettings(SettingsSection::LicenseApache));
+        license.append_items(&[&mit, &apache]).ok()?;
         let help = b.fixed(
             "KadeeStudio Help",
             Action::Run(url(&format!("{REPO}#readme"))),
@@ -199,11 +201,59 @@ impl MacMenu {
             ctx.request_repaint();
         }));
 
-        let mut this =
-            Self { _menu: menu, bound: b.bound, fixed: b.fixed, actions: b.actions, shown: Vec::new(), suspended: false, events };
+        let mut this = Self {
+            _menu: menu,
+            bound: b.bound,
+            fixed: b.fixed,
+            actions: b.actions,
+            shown: Vec::new(),
+            suspended: false,
+            events,
+            doc_items: vec![save, save_as, print],
+            doc_enabled: true,
+            recent_menu,
+            recent_shown: None,
+            recent_ids: Vec::new(),
+        };
         this.shown = vec![None; this.bound.len()];
         this.sync(keymap, false);
+        this.sync_documents(false, &[]);
         Some(this)
+    }
+
+    /// Save, Save As… and Print… follow whether the active tab has an editor; File › Recent
+    /// lists `recent` (the most recent first). Cheap enough to call every frame.
+    pub fn sync_documents(&mut self, has_editor: bool, recent: &[PathBuf]) {
+        let on = has_editor && !self.suspended;
+        if self.doc_enabled != on {
+            for item in &self.doc_items {
+                item.set_enabled(on);
+            }
+            self.doc_enabled = on;
+        }
+        if self.recent_shown.as_deref() == Some(recent) {
+            return;
+        }
+        while self.recent_menu.remove_at(0).is_some() {}
+        for id in self.recent_ids.drain(..) {
+            self.actions.remove(&id);
+        }
+        if recent.is_empty() {
+            let _ = self.recent_menu.append(&MenuItem::new("No recent documents", false, None));
+        }
+        for path in recent {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string());
+            let item = MenuItem::new(name, true, None);
+            self.actions.insert(item.id().clone(), Action::Run(Command::OpenPath(path.clone())));
+            self.recent_ids.push(item.id().clone());
+            let _ = self.recent_menu.append(&item);
+        }
+        let _ = self.recent_menu.append(&PredefinedMenuItem::separator());
+        let all = MenuItem::new("Recent…", true, None);
+        self.actions.insert(all.id().clone(), Action::Run(Command::ShowPage(Page::Recent)));
+        self.recent_ids.push(all.id().clone());
+        let _ = self.recent_menu.append(&all);
+        self.recent_shown = Some(recent.to_vec());
     }
 
     /// Show the key map's shortcuts on the items, and switch the items off while
@@ -224,6 +274,8 @@ impl MacMenu {
             for item in self.bound.iter().map(|(i, _)| i).chain(&self.fixed) {
                 item.set_enabled(!recording);
             }
+            // sync_documents puts Save, Save As… and Print… back the way the tab needs them
+            self.doc_enabled = !recording;
         }
     }
 

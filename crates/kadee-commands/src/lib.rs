@@ -18,11 +18,13 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Home,
+    /// The New document chooser.
+    New,
     Recent,
     Starred,
     Folder,
     CraftApps,
-    /// The KaDee AI chat.
+    /// The KaDee AI chat: opens the KaDee AI pane on the right.
     Ai,
 }
 
@@ -36,15 +38,21 @@ pub enum SettingsSection {
     /// KaDee AI: which model each part of KadeeStudio uses.
     AiModels,
     About,
+    /// License Agreement: the MIT license.
+    LicenseMit,
+    /// License Agreement: the Apache License 2.0.
+    LicenseApache,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 5] = [
+    pub const ALL: [SettingsSection; 7] = [
         SettingsSection::General,
         SettingsSection::Keyboard,
         SettingsSection::AiProviders,
         SettingsSection::AiModels,
         SettingsSection::About,
+        SettingsSection::LicenseMit,
+        SettingsSection::LicenseApache,
     ];
 
     pub fn label(self) -> &'static str {
@@ -54,6 +62,8 @@ impl SettingsSection {
             SettingsSection::AiProviders => "AI providers",
             SettingsSection::AiModels => "AI models",
             SettingsSection::About => "About",
+            SettingsSection::LicenseMit => "License — MIT",
+            SettingsSection::LicenseApache => "License — Apache-2.0",
         }
     }
 
@@ -64,6 +74,8 @@ impl SettingsSection {
             SettingsSection::AiProviders => "ai-providers",
             SettingsSection::AiModels => "ai-models",
             SettingsSection::About => "about",
+            SettingsSection::LicenseMit => "license-mit",
+            SettingsSection::LicenseApache => "license-apache",
         }
     }
 }
@@ -83,6 +95,28 @@ pub enum Command {
     OpenDialog,
     /// Open this file in a tab.
     OpenPath(PathBuf),
+    /// Save the document in the active tab (Save As when it was never saved).
+    Save,
+    /// Save the document in the active tab under another name.
+    SaveAs,
+    /// Print the document in the active tab.
+    Print,
+    /// Delete a file (it goes to the Trash), after asking; a missing file is only forgotten.
+    DeleteFile(PathBuf),
+    /// Pick a folder in the system's folder dialog and pin it to the sidebar's Folders.
+    PinFolder,
+    /// Take a folder off the sidebar's Folders (the folder itself is untouched).
+    UnpinFolder(PathBuf),
+    /// Show the documents and sub-folders of a folder (a root of the folder tree or one below).
+    ShowFolder(PathBuf),
+    /// Open or close a folder in the sidebar's folder tree.
+    ToggleFolder(PathBuf),
+    /// Ask for a name and create a folder inside this one.
+    NewFolder(PathBuf),
+    /// Ask for a new name for this folder.
+    RenameFolder(PathBuf),
+    /// Move this folder and everything in it to the Trash, after asking.
+    DeleteFolder(PathBuf),
     /// Switch to the Home tab and show a page.
     ShowPage(Page),
     /// Open the Settings window at a section.
@@ -120,6 +154,17 @@ impl Command {
             Command::OpenModule(k) => format!("module.open.{}", k.id()),
             Command::OpenDialog => "file.open".into(),
             Command::OpenPath(_) => "file.open_path".into(),
+            Command::Save => "file.save".into(),
+            Command::SaveAs => "file.save_as".into(),
+            Command::Print => "file.print".into(),
+            Command::DeleteFile(_) => "library.delete".into(),
+            Command::PinFolder => "folder.pin".into(),
+            Command::UnpinFolder(_) => "folder.unpin".into(),
+            Command::ShowFolder(_) => "folder.show".into(),
+            Command::ToggleFolder(_) => "folder.toggle".into(),
+            Command::NewFolder(_) => "folder.new".into(),
+            Command::RenameFolder(_) => "folder.rename".into(),
+            Command::DeleteFolder(_) => "folder.delete".into(),
             Command::ShowPage(p) => format!("home.show.{}", format!("{p:?}").to_lowercase()),
             Command::OpenSettings(s) => format!("settings.open.{}", s.id()),
             Command::ToggleAiPane => "ai.toggle_pane".into(),
@@ -171,6 +216,9 @@ pub fn bindable_commands() -> Vec<(Command, String)> {
         (Command::NewOffice(OfficeKind::Spreadsheet), "New spreadsheet".into()),
         (Command::NewOffice(OfficeKind::SlideDeck), "New slide deck".into()),
         (Command::OpenDialog, "Open a file".into()),
+        (Command::Save, "Save".into()),
+        (Command::SaveAs, "Save As…".into()),
+        (Command::Print, "Print…".into()),
         (Command::CloseActiveTab, "Close tab".into()),
         (Command::ReopenClosedTab, "Reopen closed tab".into()),
         (Command::NextTab, "Next tab".into()),
@@ -181,12 +229,15 @@ pub fn bindable_commands() -> Vec<(Command, String)> {
         v.push((Command::ActivateTab(n), format!("Go to tab {}", n + 1)));
     }
     v.extend([
+        (Command::ShowPage(Page::Home), "Show Home".into()),
+        (Command::ShowPage(Page::New), "Show New document".into()),
         (Command::ShowPage(Page::Recent), "Show Recent".into()),
         (Command::ShowPage(Page::Starred), "Show Starred".into()),
         (Command::ShowPage(Page::CraftApps), "Show Crafting Apps".into()),
         (Command::ShowPage(Page::Ai), "Show KaDee AI".into()),
         (Command::ToggleAiPane, "Show or hide the KaDee AI pane".into()),
         (Command::ShowPage(Page::Folder), "Show the KadeeStudio folder".into()),
+        (Command::PinFolder, "Add a folder to the sidebar…".into()),
         (Command::OpenSettings(SettingsSection::General), "Settings".into()),
         (Command::OpenSettings(SettingsSection::Keyboard), "Keyboard shortcuts".into()),
         (Command::OpenSettings(SettingsSection::AiProviders), "AI providers".into()),
@@ -467,6 +518,9 @@ impl Keymap {
             Binding { command: Command::NewDocument(ModuleKind::Dashboard), keys: ps("D") },
             Binding { command: Command::NewDocument(ModuleKind::Report), keys: ps("R") },
             Binding { command: Command::OpenDialog, keys: p("O") },
+            Binding { command: Command::Save, keys: p("S") },
+            Binding { command: Command::SaveAs, keys: vec![Chord::new("S").primary(os).alt()] },
+            Binding { command: Command::Print, keys: p("P") },
             Binding { command: Command::CloseActiveTab, keys: p("W") },
             Binding { command: Command::ReopenClosedTab, keys: ps("T") },
             Binding { command: Command::NextTab, keys: vec![Chord::new("Tab").ctrl()] },

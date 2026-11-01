@@ -113,6 +113,24 @@ pub fn all_extensions() -> Vec<&'static str> {
     v
 }
 
+/// The file types of the Open dialog: "All supported documents", then one entry per filter
+/// pill with its extensions (`("Markdown", ["md", …])`).
+pub fn open_dialog_types() -> Vec<(String, Vec<String>)> {
+    let all = all_extensions();
+    let mut out = vec![("All supported documents".to_string(), all.iter().map(|e| e.to_string()).collect())];
+    for g in DocGroup::ALL {
+        let exts: Vec<String> = all
+            .iter()
+            .filter(|e| DocKind::from_path(Path::new(&format!("x.{e}"))).is_some_and(|k| k.group == g))
+            .map(|e| e.to_string())
+            .collect();
+        if !exts.is_empty() {
+            out.push((format!("{} documents", g.label()), exts));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,6 +150,16 @@ mod tests {
         assert_eq!(DocKind::from_path(Path::new("deck.pptx")).unwrap().app_name(), "DeckCraft");
         assert_eq!(DocKind::from_path(Path::new("photo.psd")).unwrap().group, DocGroup::Graphics);
         assert!(DocKind::from_path(Path::new("notes.txt")).is_none());
+    }
+
+    #[test]
+    fn open_dialog_lists_all_then_each_group() {
+        let t = open_dialog_types();
+        assert_eq!(t[0].0, "All supported documents");
+        assert_eq!(t[0].1.len(), all_extensions().len());
+        let md = t.iter().find(|(l, _)| l == "Markdown documents").unwrap();
+        assert!(md.1.contains(&"md".to_string()) && !md.1.contains(&"pdf".to_string()));
+        assert_eq!(t.len(), 1 + DocGroup::ALL.len());
     }
 
     #[test]

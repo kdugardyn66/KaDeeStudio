@@ -91,9 +91,8 @@ pub fn forwarded(app: &mut KadeeApp, chord: Chord, now: f64) {
         Outcome::None => {}
         Outcome::Pending => {
             if app.keymap.command_for(app.matcher.pending()) == Some(&Command::NewDocumentPicker) {
-                app.picker_prefix = app.matcher.pending().to_vec();
                 app.matcher.cancel();
-                app.new_picker = true;
+                app.send(Command::ShowPage(kadee_commands::Page::New));
             }
         }
         Outcome::Fire(cmd) => app.send(cmd),
@@ -103,6 +102,10 @@ pub fn forwarded(app: &mut KadeeApp, chord: Chord, now: f64) {
 /// Run every frame before the UI: turns key presses into commands.
 pub fn keyboard(app: &mut KadeeApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
+    // letters pick a type only while the New document page is what shows
+    if app.new_picker && (app.active != 0 || app.page != kadee_commands::Page::New || app.settings_window.is_some()) {
+        app.new_picker = false;
+    }
     if app.recording.is_some() {
         record(app, ctx, now);
         return;
@@ -111,10 +114,11 @@ pub fn keyboard(app: &mut KadeeApp, ctx: &egui::Context) {
         app.send(cmd);
     }
     for (key, chord) in key_presses(ctx, &mut app.meta_down) {
-        // The New document menu is open: a letter (M, P, D, R, W, G, S …) picks the type.
-        if app.new_picker {
+        // The New document page is showing: a letter (M, P, D, R, W, G, S …) picks the type.
+        if app.new_picker && !ctx.egui_wants_keyboard_input() {
             if key == egui::Key::Escape {
                 app.new_picker = false;
+                app.send(Command::ShowPage(kadee_commands::Page::Home));
                 swallow(ctx, key);
                 continue;
             }
@@ -140,11 +144,10 @@ pub fn keyboard(app: &mut KadeeApp, ctx: &egui::Context) {
             Outcome::None => {}
             Outcome::Pending => {
                 swallow(ctx, key);
-                // Cmd+N opens its menu at once instead of waiting for the next key.
+                // Cmd+N opens the New document page at once instead of waiting for the next key.
                 if app.keymap.command_for(app.matcher.pending()) == Some(&Command::NewDocumentPicker) {
-                    app.picker_prefix = app.matcher.pending().to_vec();
                     app.matcher.cancel();
-                    app.new_picker = true;
+                    app.send(Command::ShowPage(kadee_commands::Page::New));
                 }
             }
             Outcome::Fire(cmd) => {
@@ -285,32 +288,31 @@ const OFFICE: [Choice; 3] =
 /// The New document menu (Cmd+N by default). Each tile shows the letter that
 /// picks it; the letters are ordinary shortcuts (`Cmd+N M`), so they can be
 /// changed on the Keyboard shortcuts page.
-pub fn new_document_picker(app: &mut KadeeApp, ui: &Ui) {
-    if !app.new_picker {
-        return;
-    }
-    let ctx = ui.ctx().clone();
+/// The New document page in the middle pane (sidebar › New, Cmd+N): a tile per document type.
+/// After Cmd+N a letter picks the type (M Markdown, P PDF …).
+pub fn new_page(app: &mut KadeeApp, ui: &mut Ui) {
     let letter = |c: Choice| -> Option<String> {
         app.keymap.next_keys(&app.picker_prefix).into_iter().find(|(_, cmd)| **cmd == c.command()).map(|(k, _)| k.display(OS))
     };
     let letters: Vec<(Choice, Option<String>)> = KADEE.iter().chain(OFFICE.iter()).map(|&c| (c, letter(c))).collect();
     let mut chosen = None;
-    let resp = egui::Modal::new(egui::Id::unique("kadee-new-document")).show(&ctx, |ui| {
+    let folder = app.documents_name();
+    super::home::content_column(ui, |ui| {
         let pal = Palette::of(ui);
-        ui.set_width(520.0);
-        ui.label(RichText::new("New document").size(20.0).strong().color(pal.text));
+        ui.add_space(30.0);
+        ui.label(RichText::new("New document").size(26.0).strong().color(pal.text));
         let hint = if letters.iter().any(|(_, l)| l.is_some()) {
-            "Press a letter or click. It is saved in your KadeeStudio folder and opens in a new tab."
+            format!("Press a letter or click. It is saved in your {folder} folder and opens in a new tab.")
         } else {
-            "It is saved in your KadeeStudio folder and opens in a new tab."
+            format!("It is saved in your {folder} folder and opens in a new tab.")
         };
-        ui.label(RichText::new(hint).color(pal.text_muted));
+        ui.label(RichText::new(hint).size(14.0).color(pal.text_muted));
         for (title, row) in [("KadeeStudio", &letters[..4]), ("Office — opens in WordCraft, GridCraft and DeckCraft", &letters[4..])] {
-            ui.add_space(14.0);
-            ui.label(RichText::new(title).size(12.0).strong().color(pal.text_faint));
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 12.0;
+            ui.add_space(22.0);
+            ui.label(RichText::new(title.to_uppercase()).size(12.0).strong().color(pal.text_faint));
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
                 for (choice, key) in row {
                     if tile(ui, *choice, key.as_deref()).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                         chosen = Some(*choice);
@@ -318,19 +320,12 @@ pub fn new_document_picker(app: &mut KadeeApp, ui: &Ui) {
                 }
             });
         }
-        ui.add_space(14.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Cancel").clicked() {
-                ui.close();
-            }
-            ui.label(RichText::new("Esc closes").size(12.0).color(pal.text_faint));
-        });
+        ui.add_space(22.0);
+        ui.label(RichText::new("Kadee Markdown has more templates under File › New in the editor.").size(12.5).color(pal.text_faint));
     });
     if let Some(choice) = chosen {
         app.new_picker = false;
         app.send(choice.command());
-    } else if resp.should_close() {
-        app.new_picker = false;
     }
 }
 

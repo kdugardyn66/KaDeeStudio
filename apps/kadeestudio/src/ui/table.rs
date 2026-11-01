@@ -16,14 +16,15 @@ struct Cols {
     modified: f32,
     size: f32,
     star: f32,
+    bin: f32,
 }
 
 fn cols(rect: Rect) -> Cols {
     let r = rect.max.x;
-    Cols { name: rect.min.x + 14.0, opened: r - 400.0, modified: r - 270.0, size: r - 140.0, star: r - 26.0 }
+    Cols { name: rect.min.x + 14.0, opened: r - 420.0, modified: r - 290.0, size: r - 160.0, star: r - 50.0, bin: r - 20.0 }
 }
 
-pub fn file_table(app: &mut KadeeApp, ui: &mut Ui, entries: &[FileEntry]) {
+pub fn file_table(app: &mut KadeeApp, ui: &mut Ui, folders: &[std::path::PathBuf], entries: &[FileEntry]) {
     let pal = Palette::of(ui);
     let w = ui.available_width();
     let frame = egui::Frame::new()
@@ -35,19 +36,26 @@ pub fn file_table(app: &mut KadeeApp, ui: &mut Ui, entries: &[FileEntry]) {
         ui.set_width(w - 12.0);
         ui.spacing_mut().item_spacing.y = 0.0;
         header(app, ui);
-        if entries.is_empty() {
+        if entries.is_empty() && folders.is_empty() {
             empty_state(app, ui);
             return;
         }
         let t = now();
+        for d in folders {
+            folder_row(app, ui, d, t);
+        }
         for e in entries {
             row(app, ui, e, t);
         }
     });
     ui.add_space(6.0);
-    ui.label(
-        RichText::new(format!("{} document{}", entries.len(), if entries.len() == 1 { "" } else { "s" })).size(12.0).color(pal.text_faint),
-    );
+    let docs = format!("{} document{}", entries.len(), if entries.len() == 1 { "" } else { "s" });
+    let count = match folders.len() {
+        0 => docs,
+        1 => format!("1 folder · {docs}"),
+        n => format!("{n} folders · {docs}"),
+    };
+    ui.label(RichText::new(count).size(12.0).color(pal.text_faint));
 }
 
 fn header(app: &mut KadeeApp, ui: &mut Ui) {
@@ -94,7 +102,12 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
     let starred = app.state.library.is_starred(&e.path);
     let star_rect = Rect::from_center_size(pos2(c.star, rect.center().y), Vec2::splat(26.0));
     let star_resp = ui.interact(star_rect, resp.id.with("star"), Sense::click());
-    let hovered = resp.hovered() || star_resp.hovered();
+    // the bin, after the star, on Recent
+    let show_bin = app.page == Page::Recent;
+    let bin_rect = Rect::from_center_size(pos2(c.bin, rect.center().y), Vec2::splat(26.0));
+    let bin_resp = show_bin.then(|| ui.interact(bin_rect, resp.id.with("bin"), Sense::click()));
+    let bin_hovered = bin_resp.as_ref().is_some_and(|r| r.hovered());
+    let hovered = resp.hovered() || star_resp.hovered() || bin_hovered;
     let p = ui.painter();
     if hovered {
         p.rect_filled(rect.shrink2(vec2(0.0, 2.0)), CornerRadius::same(7), pal.surface_hover);
@@ -142,11 +155,22 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         };
         icons::paint(p, star_rect.shrink(5.0), icon, col);
     }
+    if show_bin && hovered {
+        let col = if bin_hovered { pal.danger } else { pal.text_faint };
+        icons::paint(p, bin_rect.shrink(5.0), Icon::Trash, col);
+    }
     p.hline(rect.x_range().shrink(8.0), rect.max.y, Stroke::new(1.0, pal.border.gamma_multiply(0.6)));
 
     if star_resp.on_hover_text(if starred { "Unstar" } else { "Star" }).clicked() {
         app.send(Command::ToggleStar(e.path.clone()));
         return;
+    }
+    if let Some(b) = bin_resp {
+        let tip = if e.exists { "Delete the file…" } else { "Remove from Recent (the file no longer exists)" };
+        if b.on_hover_text(tip).clicked() {
+            app.send(Command::DeleteFile(e.path.clone()));
+            return;
+        }
     }
     let path = e.path.clone();
     let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -168,9 +192,65 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         if in_recent {
             item(ui, "Remove from Recent", Command::RemoveFromRecent(path.clone()));
         }
+        ui.separator();
+        item(ui, "Delete…", Command::DeleteFile(path.clone()));
     });
     if resp.clicked() || resp.double_clicked() {
         app.send(Command::OpenPath(e.path.clone()));
+    }
+}
+
+/// A sub-folder in a folder page's table: click to open it, right-click for its actions.
+fn folder_row(app: &mut KadeeApp, ui: &mut Ui, dir: &std::path::Path, t: u64) {
+    let pal = Palette::of(ui);
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
+    let c = cols(rect);
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect.shrink2(vec2(0.0, 2.0)), CornerRadius::same(7), pal.surface_hover);
+    }
+    let badge = Rect::from_center_size(pos2(c.name + 14.0, rect.center().y), Vec2::splat(28.0));
+    p.rect_filled(badge, CornerRadius::same(7), pal.accent_soft);
+    icons::paint(p, badge.shrink(6.0), Icon::Folder, pal.accent);
+    let name = crate::app::file_name(dir);
+    p.text(pos2(c.name + 40.0, rect.center().y - 8.0), Align2::LEFT_CENTER, &name, FontId::proportional(14.0), pal.text);
+    p.text(pos2(c.name + 40.0, rect.center().y + 9.0), Align2::LEFT_CENTER, "Folder", FontId::proportional(11.5), pal.text_faint);
+    let modified = std::fs::metadata(dir)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| relative_time(d.as_secs(), t))
+        .unwrap_or_else(|| "—".into());
+    let small = FontId::proportional(13.0);
+    p.text(pos2(c.opened, rect.center().y), Align2::LEFT_CENTER, "—", small.clone(), pal.text_muted);
+    p.text(pos2(c.modified, rect.center().y), Align2::LEFT_CENTER, modified, small.clone(), pal.text_muted);
+    p.text(pos2(c.size, rect.center().y), Align2::LEFT_CENTER, "—", small, pal.text_muted);
+    p.hline(rect.x_range().shrink(8.0), rect.max.y, Stroke::new(1.0, pal.border.gamma_multiply(0.6)));
+    let path = dir.to_path_buf();
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    resp.context_menu(|ui| {
+        ui.set_min_width(190.0);
+        let mut item = |ui: &mut Ui, label: &str, cmd: Command| {
+            if ui.button(label).clicked() {
+                app.send(cmd);
+                ui.close();
+            }
+        };
+        item(ui, "Open", Command::ShowFolder(path.clone()));
+        item(ui, "New subfolder", Command::NewFolder(path.clone()));
+        item(ui, "Rename…", Command::RenameFolder(path.clone()));
+        item(ui, "Show in folder", Command::OpenExternally(path.clone()));
+        ui.separator();
+        item(ui, "Delete folder…", Command::DeleteFolder(path.clone()));
+    });
+    if resp.clicked() {
+        // open it in the tree too, so the sidebar shows where it is
+        if let Some(parent) = path.parent()
+            && !app.is_expanded(parent)
+        {
+            app.send(Command::ToggleFolder(parent.to_path_buf()));
+        }
+        app.send(Command::ShowFolder(path));
     }
 }
 
@@ -181,6 +261,9 @@ fn empty_state(app: &mut KadeeApp, ui: &mut Ui) {
         let (msg, hint) = match app.page {
             Page::Starred => ("No starred documents", "Hover a document and click the star to keep it here."),
             Page::Recent => ("Nothing opened yet", "Documents you open appear here."),
+            Page::Folder if app.search.is_empty() && app.filter.is_none() => {
+                ("This folder is empty", "Create a document with the cards above, or make a new folder.")
+            }
             _ if !app.search.is_empty() || app.filter.is_some() => ("No documents match", "Clear the search or pick another type."),
             _ => ("No documents yet", "Create one from the cards above, or open a file."),
         };

@@ -7,6 +7,8 @@ mod app;
 mod icons;
 #[cfg(target_os = "macos")]
 mod mac_menu;
+#[cfg(target_os = "macos")]
+mod mac_open;
 #[cfg(unix)]
 mod markdown;
 mod ui;
@@ -17,9 +19,14 @@ impl eframe::App for KadeeApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         #[cfg(target_os = "macos")]
         {
+            // read what the menu shows before borrowing the menu itself
+            let has_editor = self.has_editor();
+            let recent: Vec<std::path::PathBuf> =
+                self.state.library.recent.iter().take(mac_menu::RECENT_IN_MENU).map(|e| e.path.clone()).collect();
             let actions = match self.mac_menu.as_mut() {
                 Some(menu) => {
                     menu.sync(&self.keymap, self.recording.is_some());
+                    menu.sync_documents(has_editor, &recent);
                     menu.poll()
                 }
                 None => Vec::new(),

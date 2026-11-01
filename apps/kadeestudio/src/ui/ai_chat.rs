@@ -38,9 +38,9 @@ pub fn app_kind_of(path: &Path) -> Option<AppKind> {
     }
 }
 
-/// The KaDee AI page (Home tab).
-pub fn page(app: &mut KadeeApp, ui: &mut Ui) {
-    chat(app, ui, "", None, false);
+/// The pane on Home: the general KaDee AI chat (starred files can be its context).
+pub fn home_pane(app: &mut KadeeApp, ui: &mut Ui) {
+    chat(app, ui, "", None, true);
 }
 
 /// The pane beside a file tab.
@@ -121,7 +121,13 @@ fn chat(app: &mut KadeeApp, ui: &mut Ui, key: &str, file: Option<PathBuf>, compa
                             }
                             let entries =
                                 model_entries(&hub, &config, &Default::default(), picked.as_ref(), Some("Default for this module"));
-                            if let Some(k) = picker(ui, "model", &model_label, if compact { 220.0 } else { 330.0 }, &entries) {
+                            // the Home pane also has the Starred files button: a narrower model picker
+                            let w = match (compact, key.is_empty()) {
+                                (true, true) => 170.0,
+                                (true, false) => 220.0,
+                                _ => 330.0,
+                            };
+                            if let Some(k) = picker(ui, "model", &model_label, w, &entries) {
                                 app.chat(key).model = ModelRef::parse(&k);
                             }
                             if key.is_empty() {
