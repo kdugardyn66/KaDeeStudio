@@ -332,9 +332,11 @@ mod tests {
         fs::write(other.join("Info.plist"), plist("com.example.notgridcraft", "9.9")).unwrap();
 
         let dirs = vec![t.path().to_path_buf()];
-        let cad = mac_bundle(app("CadCraft"), &dirs).unwrap();
+        let cad = mac_bundle(app("CADCraft"), &dirs).unwrap();
         assert_eq!(cad.version.as_deref(), Some("0.3.1"));
-        assert_eq!(cad.launch, Launch::MacBundle(t.path().join("CADCraft.app")));
+        // macOS file systems ignore case, so only the name's letters matter, not their case.
+        let Launch::MacBundle(found) = &cad.launch else { panic!("not a bundle") };
+        assert!(found.to_string_lossy().eq_ignore_ascii_case(&t.path().join("CADCraft.app").to_string_lossy()));
         assert!(mac_bundle(app("GridCraft"), &dirs).is_none(), "someone else's bundle");
     }
 
