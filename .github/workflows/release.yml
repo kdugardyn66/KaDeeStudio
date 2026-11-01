@@ -13,8 +13,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-
-env:
   # Run every JavaScript action on Node 24 (Node 20 is deprecated on GitHub's runners).
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
