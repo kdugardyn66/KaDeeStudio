@@ -70,7 +70,7 @@ fn chat(app: &mut KadeeApp, ui: &mut Ui, key: &str, file: Option<PathBuf>, compa
         Some(m) => model_summary(&hub, &config, m),
         None => "No model ready".to_string(),
     };
-    let col = if compact { 12.0 } else { ((ui.available_width() - 780.0) / 2.0).max(28.0) };
+    let side: i8 = if compact { 12 } else { 28 };
     let mut set_draft: Option<String> = None;
     let mut open_providers = false;
     let mut do_send = false;
@@ -79,98 +79,99 @@ fn chat(app: &mut KadeeApp, ui: &mut Ui, key: &str, file: Option<PathBuf>, compa
 
     egui::Panel::bottom(egui::Id::unique("kadee-ai-composer").with(key))
         .show_separator_line(false)
-        .frame(egui::Frame::new().fill(pal.canvas).inner_margin(Margin { left: col as i8, right: col as i8, top: 4, bottom: 16 }))
+        .frame(egui::Frame::new().fill(pal.canvas).inner_margin(Margin { left: side, right: side, top: 4, bottom: 16 }))
         .show(ui, |ui| {
-            egui::Frame::new()
-                .fill(pal.surface)
-                .stroke(Stroke::new(1.0, pal.border_strong))
-                .corner_radius(CornerRadius::same(14))
-                .inner_margin(Margin::same(10))
-                .show(ui, |ui| {
-                    let id = egui::Id::unique("kadee-ai-input").with(key);
-                    let focused = ui.ctx().memory(|m| m.has_focus(id));
-                    // Enter sends, Shift+Enter adds a line: take Enter before the editor sees it.
-                    if focused && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) {
-                        do_send = true;
-                    }
-                    let c = app.chat(key);
-                    ui.add(
-                        egui::TextEdit::multiline(&mut c.draft)
-                            .id(id)
-                            .hint_text(if compact {
-                                "Ask anything…"
-                            } else {
-                                "Ask anything…  (Enter to send, Shift+Enter for a new line)"
-                            })
-                            .desired_rows(if compact { 2 } else { 3 })
-                            .desired_width(f32::INFINITY)
-                            .frame(egui::Frame::NONE)
-                            .margin(Margin::symmetric(6, 4)),
-                    );
-                    ui.add_space(6.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-                        if !compact {
-                            let mut labels = vec![PickEntry::plain("", "General chat", target.is_none())];
-                            labels.extend(AppKind::ALL.into_iter().map(|k| PickEntry::plain(k.id(), k.name(), target == Some(k))));
-                            let l = target.map(|k| format!("For {}", k.name())).unwrap_or_else(|| "General chat".into());
-                            if let Some(k) = picker(ui, "for", &l, 190.0, &labels) {
-                                app.chat(key).target = AppKind::ALL.into_iter().find(|a| a.id() == k);
-                            }
+            centered(ui, compact, |ui| {
+                egui::Frame::new()
+                    .fill(pal.surface)
+                    .stroke(Stroke::new(1.0, pal.border_strong))
+                    .corner_radius(CornerRadius::same(14))
+                    .inner_margin(Margin::same(10))
+                    .show(ui, |ui| {
+                        let id = egui::Id::unique("kadee-ai-input").with(key);
+                        let focused = ui.ctx().memory(|m| m.has_focus(id));
+                        // Enter sends, Shift+Enter adds a line: take Enter before the editor sees it.
+                        if focused && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) {
+                            do_send = true;
                         }
-                        let entries = model_entries(&hub, &config, &Default::default(), picked.as_ref(), Some("Default for this module"));
-                        if let Some(k) = picker(ui, "model", &model_label, if compact { 220.0 } else { 330.0 }, &entries) {
-                            app.chat(key).model = ModelRef::parse(&k);
-                        }
-                        if key.is_empty() {
-                            let n = app.state.library.starred.len();
-                            let on = app.chat(key).use_starred;
-                            let b = egui::Button::new(RichText::new(format!("Starred files ({n})")).size(13.0).color(if on {
-                                pal.accent
-                            } else {
-                                pal.text_muted
-                            }))
-                            .fill(if on { pal.accent_soft } else { pal.surface })
-                            .stroke(Stroke::new(1.0, if on { pal.accent } else { pal.border }))
-                            .corner_radius(CornerRadius::same(8))
-                            .min_size(vec2(0.0, 34.0));
-                            if ui.add(b).on_hover_text("Answer from your starred files").clicked() {
-                                app.chat(key).use_starred = !on;
-                            }
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            if running {
-                                if round_button(ui, Icon::Stop, "Stop", true) {
-                                    do_stop = true;
+                        let c = app.chat(key);
+                        ui.add(
+                            egui::TextEdit::multiline(&mut c.draft)
+                                .id(id)
+                                .hint_text(if compact {
+                                    "Ask anything…"
+                                } else {
+                                    "Ask anything…  (Enter to send, Shift+Enter for a new line)"
+                                })
+                                .desired_rows(if compact { 2 } else { 3 })
+                                .desired_width(f32::INFINITY)
+                                .frame(egui::Frame::NONE)
+                                .margin(Margin::symmetric(6, 4)),
+                        );
+                        ui.add_space(6.0);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+                            if !compact {
+                                let mut labels = vec![PickEntry::plain("", "General chat", target.is_none())];
+                                labels.extend(AppKind::ALL.into_iter().map(|k| PickEntry::plain(k.id(), k.name(), target == Some(k))));
+                                let l = target.map(|k| format!("For {}", k.name())).unwrap_or_else(|| "General chat".into());
+                                if let Some(k) = picker(ui, "for", &l, 190.0, &labels) {
+                                    app.chat(key).target = AppKind::ALL.into_iter().find(|a| a.id() == k);
                                 }
-                            } else {
-                                let has_text = !app.chat(key).draft.trim().is_empty();
-                                ui.add_enabled_ui(has_text, |ui| {
-                                    if round_button(ui, Icon::Send, "Send", false) {
-                                        do_send = true;
+                            }
+                            let entries =
+                                model_entries(&hub, &config, &Default::default(), picked.as_ref(), Some("Default for this module"));
+                            if let Some(k) = picker(ui, "model", &model_label, if compact { 220.0 } else { 330.0 }, &entries) {
+                                app.chat(key).model = ModelRef::parse(&k);
+                            }
+                            if key.is_empty() {
+                                let n = app.state.library.starred.len();
+                                let on = app.chat(key).use_starred;
+                                let b = egui::Button::new(RichText::new(format!("Starred files ({n})")).size(13.0).color(if on {
+                                    pal.accent
+                                } else {
+                                    pal.text_muted
+                                }))
+                                .fill(if on { pal.accent_soft } else { pal.surface })
+                                .stroke(Stroke::new(1.0, if on { pal.accent } else { pal.border }))
+                                .corner_radius(CornerRadius::same(8))
+                                .min_size(vec2(0.0, 34.0));
+                                if ui.add(b).on_hover_text("Answer from your starred files").clicked() {
+                                    app.chat(key).use_starred = !on;
+                                }
+                            }
+                            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                if running {
+                                    if round_button(ui, Icon::Stop, "Stop", true) {
+                                        do_stop = true;
                                     }
-                                });
-                            }
-                            if !empty {
-                                let b = egui::Button::new(RichText::new("New chat").size(13.0).color(pal.text_muted))
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .min_size(vec2(0.0, 34.0));
-                                if ui.add(b).clicked() {
-                                    do_clear = true;
+                                } else {
+                                    let has_text = !app.chat(key).draft.trim().is_empty();
+                                    ui.add_enabled_ui(has_text, |ui| {
+                                        if round_button(ui, Icon::Send, "Send", false) {
+                                            do_send = true;
+                                        }
+                                    });
                                 }
-                            }
+                                if !empty {
+                                    let b = egui::Button::new(RichText::new("New chat").size(13.0).color(pal.text_muted))
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .min_size(vec2(0.0, 34.0));
+                                    if ui.add(b).clicked() {
+                                        do_clear = true;
+                                    }
+                                }
+                            });
                         });
                     });
-                });
+            });
         });
 
     egui::CentralPanel::default().frame(egui::Frame::new().fill(pal.canvas)).show(ui, |ui| {
-        let width = ui.available_width();
         egui::ScrollArea::vertical().id_salt(("kadee-ai-scroll", key)).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
-            ui.set_width(width);
-            egui::Frame::new().inner_margin(Margin { left: col as i8, right: col as i8, top: 18, bottom: 12 }).show(ui, |ui| {
-                ui.set_width(width - col * 2.0 - 16.0);
+            ui.add_space(18.0);
+            centered(ui, compact, |ui| {
                 if empty {
                     welcome(ui, compact, model.is_none(), &mut set_draft, &mut open_providers, &pal, file.as_deref());
                 } else {
@@ -183,6 +184,7 @@ fn chat(app: &mut KadeeApp, ui: &mut Ui, key: &str, file: Option<PathBuf>, compa
                     }
                 }
             });
+            ui.add_space(12.0);
         });
     });
 
@@ -205,6 +207,20 @@ fn chat(app: &mut KadeeApp, ui: &mut Ui, key: &str, file: Option<PathBuf>, compa
         app.chat(key).send(&hub, context);
         ui.ctx().request_repaint();
     }
+}
+
+/// Run `add` in a column centred in the available width: at most 780 wide on the page, the
+/// whole width in the pane. The composer and the messages use it, so they line up.
+fn centered(ui: &mut Ui, compact: bool, add: impl FnOnce(&mut Ui)) {
+    let r = ui.available_rect_before_wrap();
+    let w = if compact { r.width() } else { r.width().min(780.0) };
+    let x = r.center().x - w / 2.0;
+    let col = egui::Rect::from_min_max(pos2(x, r.min.y), pos2(x + w, r.max.y));
+    let used = ui.scope_builder(egui::UiBuilder::new().max_rect(col), |ui| {
+        ui.set_width(w);
+        add(ui);
+    });
+    ui.allocate_rect(used.response.rect, Sense::hover());
 }
 
 /// What the model gets besides the question: the starred files (page) or the open file (pane).

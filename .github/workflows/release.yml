@@ -1,6 +1,6 @@
 # Builds installers for macOS, Linux and Windows with the scripts in scripts/.
 # Run it by hand (Actions → Release → Run workflow) to get the files as build artifacts,
-# or push a tag like v0.1.0 to also publish them as a GitHub release.
+# or push a tag like v0.2.0 to also publish them as a GitHub release.
 name: Release
 
 on:
@@ -14,11 +14,15 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
+env:
+  # Run every JavaScript action on Node 24 (Node 20 is deprecated on GitHub's runners).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
@@ -26,7 +30,7 @@ jobs:
       # No Finder window layout on a headless runner: DMG_LAYOUT=0 (plain .dmg, no background).
       - name: Build .app and .dmg (universal)
         run: DMG_LAYOUT=0 ./scripts/build-macos.sh --universal
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kadeestudio-macos
           path: |
@@ -37,7 +41,7 @@ jobs:
     # 22.04 keeps the glibc requirement low, so the build runs on more distributions.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build dependencies and packaging tools
@@ -50,7 +54,7 @@ jobs:
           sudo chmod +x /usr/local/bin/appimagetool
       - name: Build .tar.gz, .deb, .rpm and AppImage
         run: ./scripts/build-linux.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kadeestudio-linux
           path: |
@@ -63,7 +67,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: WiX toolset
@@ -73,7 +77,7 @@ jobs:
       - name: Build .zip and .msi
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Msi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kadeestudio-windows
           path: |
@@ -86,11 +90,11 @@ jobs:
     needs: [macos, linux, windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
