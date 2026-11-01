@@ -101,8 +101,13 @@ pub enum Command {
     SaveAs,
     /// Print the document in the active tab.
     Print,
-    /// Delete a file (it goes to the Trash), after asking; a missing file is only forgotten.
+    /// Move a file to the Trash after asking ("Delete files", as in GenOffice); a file that
+    /// cannot be found asks to take it off the list instead.
     DeleteFile(PathBuf),
+    /// Ask for a new name for a file (same folder, same extension).
+    RenameFile(PathBuf),
+    /// Copy a file next to itself as "<name> copy".
+    DuplicateFile(PathBuf),
     /// Pick a folder in the system's folder dialog and pin it to the sidebar's Folders.
     PinFolder,
     /// Take a folder off the sidebar's Folders (the folder itself is untouched).
@@ -158,6 +163,8 @@ impl Command {
             Command::SaveAs => "file.save_as".into(),
             Command::Print => "file.print".into(),
             Command::DeleteFile(_) => "library.delete".into(),
+            Command::RenameFile(_) => "file.rename".into(),
+            Command::DuplicateFile(_) => "file.duplicate".into(),
             Command::PinFolder => "folder.pin".into(),
             Command::UnpinFolder(_) => "folder.unpin".into(),
             Command::ShowFolder(_) => "folder.show".into(),

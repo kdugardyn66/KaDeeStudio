@@ -245,9 +245,13 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
         ui.label(RichText::new("Installed Crafting Apps appear here with their icons; click one to open it.").color(pal.text_muted));
         return;
     }
+    // The same tiles at every width: as many per row as fit (at least TILE_MIN wide), so the
+    // rows rearrange when the window narrows or the KaDee AI pane opens.
+    const TILE_MIN: f32 = 150.0;
     let gap = 10.0;
-    let cols = 7usize;
-    let cw = (ui.available_width() - gap * (cols as f32 - 1.0)) / cols as f32;
+    let avail = ui.available_width();
+    let cols = (((avail + gap) / (TILE_MIN + gap)).floor() as usize).max(1);
+    let cw = (avail - gap * (cols as f32 - 1.0)) / cols as f32;
     for row in installed.chunks(cols) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
@@ -263,7 +267,13 @@ fn craft_strip(app: &mut KadeeApp, ui: &mut Ui) {
                 let icon = Rect::from_center_size(pos2(r.min.x + 29.0, r.center().y), Vec2::splat(38.0));
                 app.craft_icons.paint(ui, icon, found.app, false);
                 let p = ui.painter();
-                p.text(pos2(r.min.x + 56.0, r.min.y + 21.0), Align2::LEFT_CENTER, found.app.name, FontId::proportional(13.5), pal.text);
+                p.text(
+                    pos2(r.min.x + 56.0, r.min.y + 21.0),
+                    Align2::LEFT_CENTER,
+                    super::truncate(found.app.name, ((cw - 62.0) / 7.0) as usize),
+                    FontId::proportional(13.5),
+                    pal.text,
+                );
                 p.text(
                     pos2(r.min.x + 56.0, r.min.y + 39.0),
                     Align2::LEFT_CENTER,

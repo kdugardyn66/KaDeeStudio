@@ -18,7 +18,8 @@ pub mod store;
 pub use craft::{CRAFT_APPS, CRAFT_PHASE, CraftApp, LAUNCHER_REPO, SOLIDCRAFT_REPO};
 pub use doctype::{DocGroup, DocKind, Opener, all_extensions, open_dialog_types};
 pub use files::{
-    FileEntry, create_folder, create_new_document, human_size, list_documents, list_subfolders, now, relative_time, rename_folder,
+    FileEntry, create_folder, create_new_document, duplicate_file, human_size, list_documents, list_subfolders, now, relative_time,
+    rename_file, rename_folder,
 };
 pub use installed::{InstalledApp, Launch, detect_installed};
 pub use library::{Library, RecentEntry};

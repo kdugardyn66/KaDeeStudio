@@ -22,12 +22,33 @@ pub enum SortKey {
     Size,
 }
 
-/// A question about a folder in the sidebar's tree or the folder page.
+/// A question about a file or a folder (as in GenOffice): a name to type, or a yes/no.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FolderDialog {
-    New { parent: PathBuf, name: String },
-    Rename { dir: PathBuf, name: String },
-    Delete { dir: PathBuf },
+    New {
+        parent: PathBuf,
+        name: String,
+    },
+    Rename {
+        dir: PathBuf,
+        name: String,
+    },
+    Delete {
+        dir: PathBuf,
+    },
+    /// Rename a document (the name without its extension).
+    RenameFile {
+        path: PathBuf,
+        name: String,
+    },
+    /// "Delete Files: Move “x” to the Trash?"
+    TrashFile {
+        path: PathBuf,
+    },
+    /// "File unavailable: … Remove it from the list?"
+    Missing {
+        path: PathBuf,
+    },
 }
 
 /// The Settings window while it is open, with what to go back to on Cancel.
@@ -73,8 +94,6 @@ pub struct KadeeApp {
     pub recording: Option<Recording>,
     /// The New document page is showing and takes the letter after Cmd+N (M, P, D …).
     pub new_picker: bool,
-    /// A file waiting for "Move to Trash?" (the Recent list's bin).
-    pub delete_confirm: Option<PathBuf>,
     /// Keys that opened the New document menu (Cmd+N); a letter after them picks the type.
     pub picker_prefix: Vec<kadee_commands::Chord>,
     /// Action picked in "Add a shortcut".
@@ -133,7 +152,6 @@ impl KadeeApp {
             matcher: Matcher::default(),
             recording: None,
             new_picker: false,
-            delete_confirm: None,
             picker_prefix: Vec::new(),
             add_choice: 0,
             meta_down: false,
@@ -578,14 +596,27 @@ impl KadeeApp {
                     self.notify("Open a document to save or print it", time);
                 }
             }
+            // as in GenOffice: Delete asks, then moves the file to the Trash; a file that
+            // cannot be found asks to take it off the list instead
             Command::DeleteFile(path) => {
-                if path.exists() {
-                    self.delete_confirm = Some(path);
-                } else {
-                    self.state.library.forget(&path);
+                self.folder_dialog =
+                    Some(if accessible(&path) { FolderDialog::TrashFile { path } } else { FolderDialog::Missing { path } });
+            }
+            Command::RenameFile(path) => {
+                let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                self.folder_dialog = Some(FolderDialog::RenameFile { path, name });
+            }
+            Command::DuplicateFile(path) => match kadee_core::duplicate_file(&path) {
+                Ok(copy) => {
+                    self.state.library.touch(&copy, now());
                     self.mark_dirty();
-                    self.notify("Removed from Recent: the file no longer exists", time);
+                    self.rescan();
+                    self.notify(format!("Made “{}”", file_name(&copy)), time);
                 }
+                Err(e) => self.notify(format!("Could not duplicate the file: {e}"), time),
+            },
+            Command::OpenPath(path) if !path.exists() && !self.tabs.contains(&path) => {
+                self.folder_dialog = Some(FolderDialog::Missing { path });
             }
             Command::OpenPath(path) => {
                 if DocKind::from_path(&path).is_some() {
@@ -748,6 +779,32 @@ fn open_dialog(dir: &Path) -> Option<PathBuf> {
             d = d.add_filter(label, exts);
         }
         d.pick_file()
+    }
+}
+
+/// The file exists and can be read: Delete and Move to Trash can work on it.
+pub fn accessible(path: &Path) -> bool {
+    path.is_file() && std::fs::File::open(path).is_ok()
+}
+
+/// Rename a document in its folder; Recent and Starred follow it. A document open in a tab
+/// is closed first.
+pub fn rename_document(app: &mut KadeeApp, path: &Path, stem: &str, time: f64) -> bool {
+    if app.tabs.iter().any(|t| t == path) {
+        app.notify("Close the document first, then rename it", time);
+        return false;
+    }
+    match kadee_core::rename_file(path, stem) {
+        Ok(to) => {
+            app.state.library.rename(path, &to);
+            app.mark_dirty();
+            app.rescan();
+            true
+        }
+        Err(e) => {
+            app.notify(format!("Could not rename the file: {e}"), time);
+            false
+        }
     }
 }
 

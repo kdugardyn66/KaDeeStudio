@@ -16,12 +16,12 @@ struct Cols {
     modified: f32,
     size: f32,
     star: f32,
-    bin: f32,
+    more: f32,
 }
 
 fn cols(rect: Rect) -> Cols {
     let r = rect.max.x;
-    Cols { name: rect.min.x + 14.0, opened: r - 420.0, modified: r - 290.0, size: r - 160.0, star: r - 50.0, bin: r - 20.0 }
+    Cols { name: rect.min.x + 14.0, opened: r - 420.0, modified: r - 290.0, size: r - 160.0, star: r - 50.0, more: r - 20.0 }
 }
 
 pub fn file_table(app: &mut KadeeApp, ui: &mut Ui, folders: &[std::path::PathBuf], entries: &[FileEntry]) {
@@ -102,12 +102,12 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
     let starred = app.state.library.is_starred(&e.path);
     let star_rect = Rect::from_center_size(pos2(c.star, rect.center().y), Vec2::splat(26.0));
     let star_resp = ui.interact(star_rect, resp.id.with("star"), Sense::click());
-    // the bin, after the star, on Recent
-    let show_bin = app.page == Page::Recent;
-    let bin_rect = Rect::from_center_size(pos2(c.bin, rect.center().y), Vec2::splat(26.0));
-    let bin_resp = show_bin.then(|| ui.interact(bin_rect, resp.id.with("bin"), Sense::click()));
-    let bin_hovered = bin_resp.as_ref().is_some_and(|r| r.hovered());
-    let hovered = resp.hovered() || star_resp.hovered() || bin_hovered;
+    // "…" after the star opens the row's menu, as in GenOffice
+    let more_rect = Rect::from_center_size(pos2(c.more, rect.center().y), Vec2::splat(26.0));
+    let more_resp = ui.interact(more_rect, resp.id.with("more"), Sense::click());
+    let menu_id = more_resp.id.with("menu");
+    let menu_open = egui::Popup::is_id_open(ui.ctx(), menu_id);
+    let hovered = resp.hovered() || star_resp.hovered() || more_resp.hovered() || menu_open;
     let p = ui.painter();
     if hovered {
         p.rect_filled(rect.shrink2(vec2(0.0, 2.0)), CornerRadius::same(7), pal.surface_hover);
@@ -155,9 +155,11 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         };
         icons::paint(p, star_rect.shrink(5.0), icon, col);
     }
-    if show_bin && hovered {
-        let col = if bin_hovered { pal.danger } else { pal.text_faint };
-        icons::paint(p, bin_rect.shrink(5.0), Icon::Trash, col);
+    if hovered {
+        if more_resp.hovered() || menu_open {
+            p.rect_filled(more_rect.shrink(2.0), CornerRadius::same(5), pal.border);
+        }
+        icons::paint(p, more_rect.shrink(6.0), Icon::MoreDots, if more_resp.hovered() { pal.text } else { pal.text_muted });
     }
     p.hline(rect.x_range().shrink(8.0), rect.max.y, Stroke::new(1.0, pal.border.gamma_multiply(0.6)));
 
@@ -165,38 +167,49 @@ fn row(app: &mut KadeeApp, ui: &mut Ui, e: &FileEntry, t: u64) {
         app.send(Command::ToggleStar(e.path.clone()));
         return;
     }
-    if let Some(b) = bin_resp {
-        let tip = if e.exists { "Delete the file…" } else { "Remove from Recent (the file no longer exists)" };
-        if b.on_hover_text(tip).clicked() {
-            app.send(Command::DeleteFile(e.path.clone()));
-            return;
-        }
-    }
     let path = e.path.clone();
+    let exists = e.exists;
+    egui::Popup::menu(&more_resp.on_hover_text("More actions")).id(menu_id).show(|ui| row_menu(app, ui, &path, exists, starred));
     let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
-    let in_recent = app.state.library.opened_at(&path).is_some();
-    resp.context_menu(|ui| {
-        ui.set_min_width(200.0);
-        let mut item = |ui: &mut Ui, label: &str, cmd: Command| {
-            if ui.button(label).clicked() {
-                app.send(cmd);
-                ui.close();
-            }
-        };
-        item(ui, "Open", Command::OpenPath(path.clone()));
-        item(ui, "Open in default app", Command::OpenExternally(path.clone()));
-        item(ui, "Show in folder", Command::RevealInFolder(path.clone()));
-        item(ui, "Copy path", Command::CopyPath(path.clone()));
-        ui.separator();
-        item(ui, if starred { "Unstar" } else { "Star" }, Command::ToggleStar(path.clone()));
-        if in_recent {
-            item(ui, "Remove from Recent", Command::RemoveFromRecent(path.clone()));
-        }
-        ui.separator();
-        item(ui, "Delete…", Command::DeleteFile(path.clone()));
-    });
+    resp.context_menu(|ui| row_menu(app, ui, &path, exists, starred));
     if resp.clicked() || resp.double_clicked() {
         app.send(Command::OpenPath(e.path.clone()));
+    }
+}
+
+/// A document's menu (the "…" button and right-click), as in GenOffice: Open, Show in folder,
+/// Copy path; Rename…, Duplicate; Remove from list (Unstar on Starred); Delete files (to the
+/// Trash, after asking). Rename, Duplicate and Delete are for files that exist.
+fn row_menu(app: &mut KadeeApp, ui: &mut Ui, path: &std::path::Path, exists: bool, starred: bool) {
+    let pal = Palette::of(ui);
+    ui.set_min_width(200.0);
+    let mut cmd: Option<Command> = None;
+    let mut item = |ui: &mut Ui, label: &str, c: Command, enabled: bool| {
+        if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+            cmd = Some(c);
+            ui.close();
+        }
+    };
+    let p = path.to_path_buf();
+    item(ui, "Open", Command::OpenPath(p.clone()), true);
+    item(ui, "Show in folder", Command::RevealInFolder(p.clone()), exists);
+    item(ui, "Copy path", Command::CopyPath(p.clone()), true);
+    ui.separator();
+    item(ui, "Rename…", Command::RenameFile(p.clone()), exists);
+    item(ui, "Duplicate", Command::DuplicateFile(p.clone()), exists);
+    ui.separator();
+    // on Starred, "remove from list" means unstar
+    if app.page == Page::Starred && starred {
+        item(ui, "Unstar", Command::ToggleStar(p.clone()), true);
+    } else if app.state.library.opened_at(path).is_some() {
+        item(ui, "Remove from list", Command::RemoveFromRecent(p.clone()), true);
+    }
+    if exists && ui.button(RichText::new("Delete files").color(pal.danger)).clicked() {
+        cmd = Some(Command::DeleteFile(p.clone()));
+        ui.close();
+    }
+    if let Some(c) = cmd {
+        app.send(c);
     }
 }
 

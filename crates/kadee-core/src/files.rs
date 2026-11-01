@@ -104,6 +104,35 @@ pub fn rename_folder(dir: &Path, name: &str) -> io::Result<PathBuf> {
     Ok(to)
 }
 
+/// Rename the file `path` to `stem` in the same folder, keeping its extension; returns the new path.
+pub fn rename_file(path: &Path, stem: &str) -> io::Result<PathBuf> {
+    let stem = valid_name(stem)?;
+    let parent = path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no parent folder"))?;
+    let name = match path.extension() {
+        Some(ext) => format!("{stem}.{}", ext.to_string_lossy()),
+        None => stem.to_string(),
+    };
+    let to = parent.join(&name);
+    if to == path {
+        return Ok(to);
+    }
+    if to.exists() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("“{name}” already exists")));
+    }
+    fs::rename(path, &to)?;
+    Ok(to)
+}
+
+/// Copy the file `path` next to itself as `<name> copy.<ext>` (numbered if taken); returns the copy.
+pub fn duplicate_file(path: &Path) -> io::Result<PathBuf> {
+    let parent = path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no parent folder"))?;
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let to = unique_path(parent, &format!("{stem} copy"), &ext);
+    fs::copy(path, &to)?;
+    Ok(to)
+}
+
 fn valid_name(name: &str) -> io::Result<&str> {
     let name = name.trim();
     if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':']) {
@@ -210,6 +239,20 @@ mod tests {
         let b = rename_folder(&a, "Customers").unwrap();
         assert!(b.is_dir() && !a.exists());
         assert!(rename_folder(&b, "archive").is_err());
+    }
+
+    #[test]
+    fn rename_and_duplicate_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("Notes.md");
+        fs::write(&a, "hello").unwrap();
+        let b = rename_file(&a, "Minutes").unwrap();
+        assert_eq!(b, tmp.path().join("Minutes.md"));
+        let c = duplicate_file(&b).unwrap();
+        assert_eq!(c, tmp.path().join("Minutes copy.md"));
+        assert_eq!(fs::read_to_string(&c).unwrap(), "hello");
+        assert_eq!(duplicate_file(&b).unwrap(), tmp.path().join("Minutes copy 2.md"));
+        assert!(rename_file(&c, "Minutes").is_err());
     }
 
     #[test]

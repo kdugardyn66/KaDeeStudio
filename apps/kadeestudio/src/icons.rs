@@ -26,7 +26,6 @@ pub enum Icon {
     Send,
     Stop,
     Chevron,
-    Trash,
     /// A document with a plus: New.
     NewDoc,
     /// Pointing right (a closed folder in the tree).
@@ -128,13 +127,6 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
             line(&[at(2.0, 6.5), at(2.0, 3.6), at(6.2, 3.6), at(7.6, 5.2), at(14.0, 5.2), at(14.0, 12.8), at(2.0, 12.8), at(2.0, 11.6)]);
             line(&[at(1.2, 9.2), at(8.2, 9.2)]);
             line(&[at(6.0, 7.0), at(8.2, 9.2), at(6.0, 11.4)]);
-        }
-        Icon::Trash => {
-            line(&[at(2.5, 4.2), at(13.5, 4.2)]);
-            line(&[at(6.2, 4.2), at(6.2, 2.4), at(9.8, 2.4), at(9.8, 4.2)]);
-            line(&[at(3.8, 4.2), at(4.6, 13.6), at(11.4, 13.6), at(12.2, 4.2)]);
-            line(&[at(6.6, 6.8), at(6.8, 11.2)]);
-            line(&[at(9.4, 6.8), at(9.2, 11.2)]);
         }
         Icon::NewDoc => {
             line(&[at(9.5, 13.8), at(3.2, 13.8), at(3.2, 2.2), at(9.2, 2.2), at(12.8, 5.8), at(12.8, 8.6)]);

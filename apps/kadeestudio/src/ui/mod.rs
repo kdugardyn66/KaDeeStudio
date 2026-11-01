@@ -92,7 +92,6 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
         }
     });
 
-    delete_dialog(app, ui);
     folder_dialog(app, ui);
     keys::sequence_hint(app, ui);
     toast(app, ui);
@@ -535,28 +534,41 @@ fn nav_row(ui: &mut Ui, icon: Icon, label: &str, count: Option<usize>, selected:
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// New folder, Rename folder and Delete folder.
+/// The questions about files and folders, as GenOffice asks them: New folder, Rename (folder or
+/// document), Delete folder, Delete Files (to the Trash) and File unavailable.
 fn folder_dialog(app: &mut KadeeApp, ui: &mut Ui) {
-    use crate::app::FolderDialog;
+    use crate::app::{FolderDialog as D, file_name};
     let Some(mut dialog) = app.folder_dialog.clone() else { return };
     let mut done: Option<bool> = None; // Some(true) = do it, Some(false) = cancel
     let resp = egui::Modal::new(egui::Id::unique("kadee-folder-dialog")).show(ui.ctx(), |ui| {
         let pal = Palette::of(ui);
         ui.set_width(440.0);
-        let (title, hint, action) = match &dialog {
-            FolderDialog::New { parent, .. } => ("New folder".to_string(), format!("In “{}”", crate::app::file_name(parent)), "Create"),
-            FolderDialog::Rename { dir, .. } => ("Rename folder".to_string(), dir.display().to_string(), "Rename"),
-            FolderDialog::Delete { dir } => (
-                format!("Delete “{}”?", crate::app::file_name(dir)),
-                "The folder and everything inside it are moved to the Trash.".to_string(),
-                "Move to Trash",
+        let (title, body, action, danger) = match &dialog {
+            D::New { parent, .. } => ("New folder".to_string(), format!("In “{}”", file_name(parent)), "Create", false),
+            D::Rename { dir, .. } => ("Rename folder".to_string(), dir.display().to_string(), "Rename", false),
+            D::RenameFile { path, .. } => ("Rename".to_string(), path.display().to_string(), "Rename", false),
+            D::Delete { dir } => (
+                "Delete Folder".to_string(),
+                format!("“{}” and everything inside it will be moved to the Trash.", file_name(dir)),
+                "Delete",
+                true,
+            ),
+            D::TrashFile { path } => ("Delete Files".to_string(), format!("Move “{}” to the Trash?", file_name(path)), "Delete", true),
+            D::Missing { path } => (
+                "File unavailable".to_string(),
+                format!(
+                    "“{}” can’t be found. It may be on a disconnected drive, or it was moved or deleted. Remove it from the list?",
+                    file_name(path)
+                ),
+                "Remove from list",
+                true,
             ),
         };
         ui.label(RichText::new(title).size(18.0).strong().color(pal.text));
-        ui.add_space(2.0);
-        ui.label(RichText::new(hint).size(12.5).color(pal.text_muted));
+        ui.add_space(4.0);
+        ui.label(RichText::new(body).size(13.0).color(pal.text_muted));
         ui.add_space(12.0);
-        if let FolderDialog::New { name, .. } | FolderDialog::Rename { name, .. } = &mut dialog {
+        if let D::New { name, .. } | D::Rename { name, .. } | D::RenameFile { name, .. } = &mut dialog {
             let mut out = egui::TextEdit::singleline(name).desired_width(f32::INFINITY).margin(Margin::symmetric(10, 7)).show(ui);
             // the first frame: focus the name with all of it selected, ready to type over
             let fresh = egui::Id::unique("kadee-folder-dialog-fresh");
@@ -573,7 +585,6 @@ fn folder_dialog(app: &mut KadeeApp, ui: &mut Ui) {
             ui.add_space(12.0);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let danger = matches!(dialog, FolderDialog::Delete { .. });
             let b = egui::Button::new(RichText::new(action).color(Color32::WHITE)).fill(if danger { pal.danger } else { pal.accent });
             if ui.add(b).clicked() {
                 done = Some(true);
@@ -595,49 +606,25 @@ fn folder_dialog(app: &mut KadeeApp, ui: &mut Ui) {
         Some(false) => app.folder_dialog = None,
         Some(true) => {
             let ok = match &dialog {
-                FolderDialog::New { parent, name } => app.create_folder(parent, name, t),
-                FolderDialog::Rename { dir, name } => app.rename_folder(dir, name, t),
-                FolderDialog::Delete { dir } => {
+                D::New { parent, name } => app.create_folder(parent, name, t),
+                D::Rename { dir, name } => app.rename_folder(dir, name, t),
+                D::RenameFile { path, name } => crate::app::rename_document(app, path, name, t),
+                D::Delete { dir } => {
                     app.trash_folder(dir, t);
+                    true
+                }
+                D::TrashFile { path } => {
+                    crate::app::trash_file(app, path, t);
+                    true
+                }
+                D::Missing { path } => {
+                    app.state.library.forget(path);
+                    app.mark_dirty();
                     true
                 }
             };
             // a name that did not work keeps the dialog open to try another
             app.folder_dialog = if ok { None } else { Some(dialog) };
-        }
-    }
-}
-
-/// "Move to Trash?" for the Recent list's bin.
-fn delete_dialog(app: &mut KadeeApp, ui: &mut Ui) {
-    let Some(path) = app.delete_confirm.clone() else { return };
-    let mut answer: Option<bool> = None;
-    let resp = egui::Modal::new(egui::Id::unique("kadee-delete")).show(ui.ctx(), |ui| {
-        let pal = Palette::of(ui);
-        ui.set_width(440.0);
-        ui.label(RichText::new(format!("Delete “{}”?", crate::app::file_name(&path))).size(18.0).strong().color(pal.text));
-        ui.add_space(4.0);
-        ui.label(RichText::new("The file is moved to the Trash and removed from Recent and Starred.").color(pal.text_muted));
-        ui.label(RichText::new(path.display().to_string()).size(12.0).monospace().color(pal.text_faint));
-        ui.add_space(14.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let del = egui::Button::new(RichText::new("Move to Trash").color(Color32::WHITE)).fill(pal.danger);
-            if ui.add(del).clicked() {
-                answer = Some(true);
-            }
-            if ui.button("Cancel").clicked() {
-                answer = Some(false);
-            }
-        });
-    });
-    if resp.should_close() && answer.is_none() {
-        answer = Some(false);
-    }
-    if let Some(yes) = answer {
-        app.delete_confirm = None;
-        if yes {
-            let t = ui.input(|i| i.time);
-            crate::app::trash_file(app, &path, t);
         }
     }
 }
