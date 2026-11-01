@@ -11,7 +11,7 @@ mod pages;
 mod settings;
 mod table;
 
-use crate::app::{KadeeApp, file_name};
+use crate::app::KadeeApp;
 use crate::icons::{self, Icon};
 use egui::{Align2, Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use kadee_commands::{Command, Page};
@@ -28,6 +28,18 @@ pub fn shortcuts(app: &mut KadeeApp, ctx: &egui::Context) {
 /// Lay out the whole window.
 pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
     let pal = Palette::of(ui);
+    // A slide show (or the editor's full screen) covers the whole window.
+    #[cfg(unix)]
+    if app.markdown.fullscreen
+        && app.active > 0
+        && let Some(path) = app.tabs.get(app.active - 1).cloned()
+        && app.markdown.has(&path)
+    {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(Color32::BLACK)).show(ui, |ui| {
+            app.markdown.area = Some((path, ui.max_rect()));
+        });
+        return;
+    }
     egui::Panel::top("tab_strip")
         .exact_size(46.0)
         .show_separator_line(false)
@@ -65,6 +77,11 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
                 Page::Ai => ai_chat::page(app, ui),
             }
         } else if let Some(path) = app.tabs.get(app.active - 1).cloned() {
+            #[cfg(unix)]
+            if crate::markdown::is_markdown(&path) {
+                markdown_area(app, ui, &path);
+                return;
+            }
             file_tab::show(app, ui, &path);
         }
     });
@@ -73,6 +90,21 @@ pub fn shell(app: &mut KadeeApp, ui: &mut Ui) {
     settings::window(app, ui);
     keys::sequence_hint(app, ui);
     toast(app, ui);
+}
+
+/// The Markdown tab: mdcraft's editor is laid over this area (see `crate::markdown`). Under it,
+/// a short message shows while the editor starts, or why it could not.
+#[cfg(unix)]
+fn markdown_area(app: &mut KadeeApp, ui: &mut Ui, path: &std::path::Path) {
+    let pal = Palette::of(ui);
+    let rect = ui.max_rect();
+    app.markdown.area = Some((path.to_path_buf(), rect));
+    let msg = match app.markdown.error(path) {
+        Some(e) => format!("{e}\n\nOn Linux the editor needs WebKitGTK 4.1 and an X11 or XWayland display."),
+        None if !app.markdown.ready(path) => "Opening the Markdown editor…".to_string(),
+        None => return,
+    };
+    ui.painter().text(rect.center(), Align2::CENTER_CENTER, msg, FontId::proportional(14.0), pal.text_muted);
 }
 
 /// A 30×30 icon button with hover background.
@@ -99,7 +131,7 @@ fn tab_strip(app: &mut KadeeApp, ui: &mut Ui) {
         let mut activate = None;
         for (i, path) in app.tabs.iter().enumerate() {
             let Some(kind) = DocKind::from_path(path) else { continue };
-            let (resp, closed) = tab(ui, app.active == i + 1, TabLabel::File(kind, file_name(path)), true);
+            let (resp, closed) = tab(ui, app.active == i + 1, TabLabel::File(kind, app.tab_name(path)), true);
             if closed {
                 close = Some(i + 1);
             } else if resp.clicked() {
@@ -351,7 +383,20 @@ fn toast(app: &mut KadeeApp, ui: &mut Ui) {
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     let pal = Palette::of(ui);
     egui::Area::new(egui::Id::unique("kadee-toast"))
-        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, if app.matcher.pending().is_empty() { -24.0 } else { -84.0 }))
+        .anchor(
+            // over a Markdown tab the editor would cover the bottom: show it in the tab strip
+            if markdown_active(app) { Align2::CENTER_TOP } else { Align2::CENTER_BOTTOM },
+            vec2(
+                0.0,
+                if markdown_active(app) {
+                    4.0
+                } else if app.matcher.pending().is_empty() {
+                    -24.0
+                } else {
+                    -84.0
+                },
+            ),
+        )
         .interactable(false)
         .show(ui.ctx(), |ui| {
             egui::Frame::new()
@@ -363,6 +408,19 @@ fn toast(app: &mut KadeeApp, ui: &mut Ui) {
                     ui.add(egui::Label::new(RichText::new(msg).color(pal.surface).size(13.5)).wrap_mode(egui::TextWrapMode::Extend));
                 });
         });
+}
+
+/// True when the active tab shows the Markdown editor.
+fn markdown_active(app: &KadeeApp) -> bool {
+    #[cfg(unix)]
+    {
+        app.active > 0 && app.tabs.get(app.active - 1).is_some_and(|p| app.markdown.has(p))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = app;
+        false
+    }
 }
 
 pub fn truncate(s: &str, max: usize) -> String {

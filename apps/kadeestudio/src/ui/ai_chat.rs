@@ -226,6 +226,11 @@ fn centered(ui: &mut Ui, compact: bool, add: impl FnOnce(&mut Ui)) {
 /// What the model gets besides the question: the starred files (page) or the open file (pane).
 fn context_for(app: &mut KadeeApp, key: &str, file: Option<&Path>) -> Option<String> {
     if let Some(f) = file {
+        // A Markdown tab: the editor's current text, unsaved edits included.
+        #[cfg(unix)]
+        if let Some((name, text)) = app.markdown.text(f) {
+            return Some(kadee_ai::text_context(&name, &text, kadee_ai::CONTEXT_BUDGET));
+        }
         return kadee_ai::file_context(f, kadee_ai::CONTEXT_BUDGET);
     }
     if app.chat(key).use_starred {
@@ -380,6 +385,16 @@ fn bubble(app: &mut KadeeApp, ui: &mut Ui, key: &str, i: usize, streaming: bool)
                         ui.ctx().copy_text(m.text.clone());
                         let t = ui.input(|i| i.time);
                         app.notify("Answer copied", t);
+                    }
+                    // The pane of a Markdown tab can put the answer into the document.
+                    #[cfg(unix)]
+                    if !m.error && !m.text.is_empty() {
+                        let path = std::path::PathBuf::from(key);
+                        if app.markdown.has(&path)
+                            && ui.small_button("Insert into document").on_hover_text("Insert at the cursor in the editor").clicked()
+                        {
+                            app.markdown.insert(&path, m.text.clone());
+                        }
                     }
                 });
             }

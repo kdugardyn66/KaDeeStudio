@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kadee Markdown</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/fonts.css">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/markdown.css">
+<link rel="stylesheet" href="/assets/themes.css">
+<link rel="stylesheet" href="/vendor/hljs/styles/github.min.css" id="ml-hljs-light">
+<link rel="stylesheet" href="/vendor/hljs/styles/github-dark.min.css" id="ml-hljs-dark" disabled>
+</head>
+<body class="booting">
+<!-- ============================================================ tab strip + ribbon -->
+<header id="md-top">
+  <div id="md-tabstrip" role="tablist">
+    <button class="md-file-tab" id="md-file-tab" data-cmd="file.backstage" title="File (Alt+F)">File</button>
+    <div id="md-tabs"></div>
+    <div class="md-tabstrip-spacer"></div>
+    <div id="md-search-wrap">
+      <span class="md-search-icon" data-icon="search"></span>
+      <input id="md-search" type="search" placeholder="Search commands (Alt+Q)" autocomplete="off" spellcheck="false">
+      <div id="md-search-results" class="md-popup" hidden></div>
+    </div>
+    <div id="md-docname" title=""></div>
+    <button class="md-qat" data-cmd="file.save" title="Save (Ctrl+S)"><span data-icon="save"></span></button>
+    <button class="md-qat" data-cmd="edit.undo" title="Undo (Ctrl+Z)"><span data-icon="undo"></span></button>
+    <button class="md-qat" data-cmd="edit.redo" title="Redo (Ctrl+Y)"><span data-icon="redo"></span></button>
+    <button class="md-qat" data-cmd="view.ribbon" id="md-collapse" title="Collapse the ribbon (Ctrl+F1)"><span data-icon="chevron-up"></span></button>
+  </div>
+  <div id="md-ribbon" role="toolbar"></div>
+</header>
+
+<!-- ============================================================ workspace -->
+<main id="md-main" data-view="split">
+  <aside id="md-nav" hidden>
+    <div class="md-pane-head">
+      <div class="md-seg" id="md-nav-tabs">
+        <button data-nav="outline" class="on">Headings</button>
+        <button data-nav="slides">Slides</button>
+      </div>
+      <button class="md-icon-btn" data-cmd="view.nav" title="Close"><span data-icon="x"></span></button>
+    </div>
+    <input id="md-nav-filter" type="search" placeholder="Search the document" spellcheck="false">
+    <div id="md-nav-body"></div>
+  </aside>
+  <section id="md-editor-pane">
+    <div id="md-editor"></div>
+  </section>
+  <div id="md-split" title="Drag to resize; double-click to reset"></div>
+  <section id="md-preview-pane">
+    <!-- MarkDown Live's viewer (ids prefixed ml-) -->
+    <div id="ml-bar" hidden>
+      <button id="ml-btn-toc"></button><span id="ml-file"></span><span id="ml-extra-buttons"></span>
+      <button id="ml-btn-zoom-out"></button><button id="ml-btn-zoom"></button><button id="ml-btn-zoom-in"></button>
+      <button id="ml-btn-sync"></button><button id="ml-btn-theme"></button><button id="ml-btn-refresh"></button><button id="ml-btn-print"></button>
+    </div>
+    <div id="ml-main">
+      <nav id="ml-toc" hidden></nav>
+      <div id="ml-scroller">
+        <div id="ml-banner" hidden></div>
+        <div id="md-page">
+          <div id="md-watermark" hidden></div>
+          <article id="ml-content" class="markdown-body theme-office"></article>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============================================================ status bar -->
+<footer id="md-status">
+  <span id="md-st-words" class="md-st-item" data-cmd="review.wordcount" title="Word count"></span>
+  <span id="md-st-pos" class="md-st-item" title="Line and column"></span>
+  <span id="md-st-slides" class="md-st-item" hidden></span>
+  <span id="md-st-save" class="md-st-item"></span>
+  <span class="md-st-item md-st-conn"><span class="dot" id="ml-dot"></span><span id="ml-conn">connecting…</span></span>
+  <span id="ml-timing" class="md-st-item md-st-dim"></span>
+  <span id="ml-libs" class="md-st-item md-st-dim"></span>
+  <span class="spacer"></span>
+  <span class="md-st-views">
+    <button data-cmd="view.write" title="Write: editor only"><span data-icon="view-write"></span></button>
+    <button data-cmd="view.split" title="Split: editor and preview"><span data-icon="view-split"></span></button>
+    <button data-cmd="view.read" title="Read: preview only"><span data-icon="view-read"></span></button>
+    <button data-cmd="slides.present" title="Present (F5)"><span data-icon="present"></span></button>
+  </span>
+  <span class="md-st-zoom">
+    <button data-cmd="view.zoomOut" title="Zoom out"><span data-icon="minus"></span></button>
+    <input id="md-zoom-slider" type="range" min="50" max="200" step="10" value="100" aria-label="Zoom">
+    <button data-cmd="view.zoomIn" title="Zoom in"><span data-icon="plus"></span></button>
+    <button id="md-zoom-label" data-cmd="view.zoomReset" title="Zoom to 100%">100%</button>
+  </span>
+  <span id="ml-ver" hidden></span>
+</footer>
+
+<!-- ============================================================ File (backstage) -->
+<div id="md-backstage" hidden>
+  <nav id="md-bs-nav">
+    <button class="md-bs-back" data-cmd="file.close-backstage" title="Back to the document (Esc)"><span data-icon="arrow-left"></span></button>
+    <button data-page="home"><span data-icon="home"></span>Home</button>
+    <button data-page="new"><span data-icon="file-plus"></span>New</button>
+    <button data-page="open"><span data-icon="folder-open"></span>Open</button>
+    <hr>
+    <button data-page="info"><span data-icon="info"></span>Info</button>
+    <button data-cmd="file.save" class="md-bs-doc"><span data-icon="save"></span>Save</button>
+    <button data-page="saveas" class="md-bs-doc"><span data-icon="save-as"></span>Save As</button>
+    <button data-page="print" class="md-bs-doc"><span data-icon="printer"></span>Print</button>
+    <button data-page="export" class="md-bs-doc"><span data-icon="export"></span>Export</button>
+    <button data-cmd="file.close" class="md-bs-doc"><span data-icon="x"></span>Close</button>
+    <div class="md-bs-grow"></div>
+    <button data-page="about"><span data-icon="logo"></span>About</button>
+    <button data-page="options"><span data-icon="settings"></span>Options</button>
+  </nav>
+  <div id="md-bs-page"></div>
+</div>
+
+<!-- ============================================================ overlays -->
+<div id="md-present" hidden>
+  <div id="md-present-stage"></div>
+  <div id="md-present-bar">
+    <button data-p="prev" title="Previous (←)"><span data-icon="chevron-left"></span></button>
+    <span id="md-present-count"></span>
+    <button data-p="next" title="Next (→)"><span data-icon="chevron-right"></span></button>
+    <button data-p="notes" title="Speaker notes (N)"><span data-icon="notes"></span></button>
+    <button data-p="exit" title="End the slide show (Esc)"><span data-icon="x"></span></button>
+  </div>
+  <div id="md-present-notes" hidden></div>
+  <div id="md-present-progress"></div>
+</div>
+<div id="md-modal-root"></div>
+<div id="md-menu-root"></div>
+<div id="md-print"></div>
+<div id="ml-toast"></div>
+
+<script nonce="{{NONCE}}">window.ML_VERSION = "{{VERSION}}"; window.MD_VERSION = "{{VERSION}}";</script>
+<script src="/vendor/morphdom/morphdom-umd.min.js"></script>
+<script src="/vendor/codemirror/codemirror.min.js"></script>
+<script src="/assets/viewer.js"></script>
+<script src="/assets/plugins.js"></script>
+<script src="/assets/media.js"></script>
+<script src="/assets/molecules.js"></script>
+<script src="/assets/print.js"></script>
+<script src="/assets/icons.js"></script>
+<script src="/assets/ui.js"></script>
+<script src="/assets/editor.js"></script>
+<script src="/assets/commands.js"></script>
+<script src="/assets/ribbon.js"></script>
+<script src="/assets/backstage.js"></script>
+<script src="/assets/present.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

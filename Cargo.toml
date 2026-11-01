@@ -1,9 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["crates/kadee-ai", "crates/kadee-core", "crates/kadee-ui", "crates/kadee-commands", "apps/kadeestudio"]
+members = [
+    "crates/kadee-ai",
+    "crates/kadee-core",
+    "crates/kadee-ui",
+    "crates/kadee-commands",
+    "crates/mdcraft-core",
+    "crates/mdcraft-templates",
+    "apps/kadeestudio",
+]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Kris Dugardyn"]
@@ -15,6 +23,8 @@ kadee-ai = { path = "crates/kadee-ai" }
 kadee-core = { path = "crates/kadee-core" }
 kadee-ui = { path = "crates/kadee-ui" }
 kadee-commands = { path = "crates/kadee-commands" }
+mdcraft-core = { path = "crates/mdcraft-core" }
+mdcraft-templates = { path = "crates/mdcraft-templates" }
 eframe = "0.37"
 egui = "0.37"
 serde = { version = "1", features = ["derive"] }

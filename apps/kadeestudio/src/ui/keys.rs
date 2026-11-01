@@ -80,6 +80,26 @@ fn swallow(ctx: &egui::Context, key: egui::Key) {
     ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key)));
 }
 
+/// A shortcut pressed while the Markdown editor had the keyboard: the page hands back the
+/// chords KadeeStudio has shortcuts for (Cmd+W, Ctrl+Tab, Cmd+J …).
+#[cfg(unix)]
+pub fn forwarded(app: &mut KadeeApp, chord: Chord, now: f64) {
+    if app.recording.is_some() {
+        return;
+    }
+    match app.matcher.feed(&app.keymap, chord, now) {
+        Outcome::None => {}
+        Outcome::Pending => {
+            if app.keymap.command_for(app.matcher.pending()) == Some(&Command::NewDocumentPicker) {
+                app.picker_prefix = app.matcher.pending().to_vec();
+                app.matcher.cancel();
+                app.new_picker = true;
+            }
+        }
+        Outcome::Fire(cmd) => app.send(cmd),
+    }
+}
+
 /// Run every frame before the UI: turns key presses into commands.
 pub fn keyboard(app: &mut KadeeApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);

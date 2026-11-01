@@ -1,0 +1,20 @@
+mdcraft
+Copyright (c) 2026 Kris Dugardyn and the mdcraft contributors.
+Licensed under the MIT License or the Apache License 2.0, at your option.
+
+This product includes work from:
+
+* WordCraft (https://github.com/storytold/wordcraft)
+  Copyright (c) 2026 ArtCraft Team and the WordCraft contributors. MIT OR Apache-2.0.
+  Used as the application template: workspace layout, ribbon and File-view design, design tokens,
+  packaging layout and contributor conventions. No WordCraft source file is copied verbatim into
+  mdcraft's UI (WordCraft's UI is egui; mdcraft's is a web UI). The ArtCraft name and brand assets
+  are trademarks of the ArtCraft Team and are NOT used or redistributed by mdcraft.
+
+* MarkDown Live 0.7.1 (zed-markdown-live)
+  Copyright (c) 2026 Kris Dugardyn. MIT License.
+  The Markdown renderer and preview server (crates/mdcraft-core/src: markdown, csv, diagrams, jobs,
+  media, config, util, http, web, app) and the browser viewer (web/assets: viewer.js, plugins.js,
+  media.js, molecules.js, print.js, markdown.css), adapted for mdcraft.
+
+Third-party libraries, fonts and assets are listed in THIRD_PARTY_NOTICES.md and ATTRIBUTION.md.

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- mdcraft app icon (original artwork; MIT OR Apache-2.0) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14967f"/><stop offset="1" stop-color="#0b5f54"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g transform="rotate(-5 256 256)">
+    <path d="M140 84 H316 L380 148 V428 H140 Z" fill="#f6f1e6" stroke="#06302a" stroke-width="13" stroke-linejoin="round"/>
+    <path d="M316 84 V148 H380" fill="none" stroke="#06302a" stroke-width="13" stroke-linejoin="round"/>
+    <path d="M186 330 V214 L224 262 L262 214 V330" fill="none" stroke="#06302a" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M318 214 V322 M290 294 L318 324 L346 294" fill="none" stroke="#0f7b6c" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M186 374 H334" stroke="#06302a" stroke-width="12" stroke-linecap="round" opacity=".45"/>
+  </g>
+</svg>

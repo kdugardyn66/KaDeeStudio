@@ -2,13 +2,33 @@
 
 A native Rust office suite with KaDee AI, Markdown, PDF, conversion, dashboards and reports, and real-time collaboration through a self-hosted server on Docker or Kubernetes. It will also host the Crafting Apps: thirteen ArtCraft apps and SolidCraft.
 
-**Status — v0.2.0, Phase 1: KaDee AI.** The start screen from 0.1.0 now has KaDee AI: chat, an AI pane next to every open file, and your choice of providers and models. No editors and no server yet.
+**Status — v0.3.0, Phase 2: Kadee Markdown.** Markdown files now open in a full editor: mdcraft's word processor for Markdown, inside the Markdown tab, with KaDee AI beside it. The other editors and the collaboration server come in later phases.
 
 ![KadeeStudio start screen](docs/screenshots/home-light.png)
 
-![KaDee AI](docs/screenshots/kadee-ai.png)
+![Kadee Markdown with KaDee AI](docs/screenshots/kadee-markdown.png)
 
-## KaDee AI (new in 0.2.0)
+## Kadee Markdown (new in 0.3.0)
+
+Kadee Markdown is [mdcraft](https://github.com/kdugardyn66/mdcraft-main), the Markdown word processor, built into KadeeStudio. Every `.md`, `.markdown`, `.mdd` and `.mds` file opens in it, in its own tab:
+
+- **Ribbon**: Home (clipboard, font and size, highlight and font colour, paragraph, the live **Styles** gallery), Insert (cover page, page break, contents, tables, pictures, diagrams, charts, media, chemistry, links, footnotes, callouts, code, equations, date, emoji, symbols), Design (document themes and fonts, paper size, orientation, margins, watermark, numbered headings), Slides (layouts, slide themes, notes, background, present, convert a document to slides), Review (spelling, word count, accessibility check), View (write / split / read, navigation pane, zoom, light or dark interface, dark page, focus mode) and the contextual Table tab. Command search: **Alt+Q**.
+- **Editor and preview**: Markdown highlighting, smart lists, search and replace, spell-check; the preview follows as you type and scrolls with the cursor; double-click a block in the preview to edit it. Mermaid, Graphviz, PlantUML, Vega, Chart.js, Plotly, KaTeX/MathJax with chemistry, CSV tables, `@import`, code chunks, pictures (HEIC too), videos and 3D molecules, all bundled so they work offline.
+- **Slides**: decks with layouts, themes, speaker notes and a full-screen slide show (**F5**; N notes, B black screen).
+- **File** view: templates (11 Word-style documents, 8 PowerPoint-style decks), **My templates** (your own `.mdd` and `.mds` files, kept in KadeeStudio's `Templates` folder), Open, Save As, document properties, print, export to PDF, a web page or formatted text, and Options.
+- **Safety**: unsaved documents are kept for recovery after a crash; closing a tab or KadeeStudio asks about unsaved changes; files are written atomically.
+
+How it fits in KadeeStudio:
+
+- New documents and Open/Save start in your KadeeStudio documents folder; a template opened while a document is open gets its own tab, and the tab follows Save As.
+- KadeeStudio's shortcuts keep working while you type: Cmd+W closes the tab, Ctrl+Tab switches tabs, Cmd+N opens the New document menu, Cmd+J the KaDee AI pane. Every other key goes to the editor (Cmd+B bold, Cmd+S save …). On macOS the Edit menu (Undo, Cut, Copy, Paste, Select All) works in the editor.
+- **KaDee AI is the assistant.** mdcraft's own AI parts (its MCP server and the agent bridge) are not included. The KaDee AI pane next to a Markdown tab reads the editor's current text, unsaved edits included, and every answer has **Insert into document**, which puts it at the cursor as one undoable edit.
+- mdcraft's settings, recent files and recovery copies live in `Markdown` next to `home.json`.
+- Kadee Markdown runs on **macOS and Linux**. On Linux it needs WebKitGTK 4.1 and runs on X11 (XWayland on a Wayland desktop; KadeeStudio switches to it itself). On Windows, Markdown files still open in the file tab with *Open in default app*.
+
+How it is built: `crates/mdcraft-core` (mdcraft's renderer and editor server, with its web interface) and `crates/mdcraft-templates` are mdcraft's crates without the AI code; `apps/kadeestudio/src/markdown.rs` runs one mdcraft core per tab and shows its page in a web view (wry: WKWebView on macOS, WebKitGTK on Linux) laid over the tab, answering the page's requests (dialogs, printing, full screen, new tabs, closing) the way mdcraft's own window does.
+
+## KaDee AI (since 0.2.0)
 
 KaDee AI is the assistant in KadeeStudio. It is built the way SolarOffice's AI is: one layer (`crates/kadee-ai`) over many providers, with the settings in `ai.toml` next to `home.json`.
 
@@ -26,7 +46,7 @@ KaDee AI is the assistant in KadeeStudio. It is built the way SolarOffice's AI i
 - **Quick-start tiles** for Markdown, PDF, Dashboard and Report, plus *Open file*. Markdown, Dashboard and Report create a new file in `~/Documents/KadeeStudio` and open it in a tab; PDF opens a PDF. Convert has no tile; it will live under File › Convert and the right-click menu.
 - **Crafting Apps**: the start screen shows the Crafting Apps that are installed on this computer, each with its own icon; click one to open it. The Crafting Apps page lists all fourteen alphabetically (CADCraft, DeckCraft, DesignCraft, EffectCraft, FigCraft, FilmCraft, GridCraft, LightCraft, PdfCraft, PhotoCraft, SolidCraft (Tangency Labs), SoundCraft, VectorCraft, WordCraft) with *Installed · version* or *Not installed*. They are found the way the ArtCraft launcher finds them: the launcher's own record, `<App>.app` in `/Applications` or `~/Applications` on macOS, `Program Files` on Windows, and AppImages, packages on `PATH` and Flatpaks on Linux. Embedding comes in Phase 7.
 - **Documents table**: filter pills All, Office, Markdown, PDF, Dashboard, Report, Graphics, Media and CAD. **All** includes every file type KadeeStudio or a Crafting App opens (`.docx`, `.xlsx`, `.pptx`, `.psd`, `.svg`, raw photos, audio, video, `.fig`, `.dwg`, `.step`, `.stl` …; the registry is `crates/kadee-core/src/doctype.rs` and `craft.rs`), and each row says which app opens it. Search, sortable Name / Opened / Modified / Size, star on hover, right-click menu (Open, Open in default app, Show in folder, Copy path, Star, Remove from Recent); missing files are marked.
-- **File tab**: until the editors exist, it shows the file's details and the app that will open it, with *Open in default app*, *Show in folder* and *Star*.
+- **File tab**: Markdown files open in Kadee Markdown; other files show their details and the app that will open them, with *Open in default app*, *Show in folder* and *Star*, until their editors exist.
 - **Settings** is a popup (the gear in the sidebar, ⌘, / Ctrl+,) with **General** (theme, your name, documents folder), **Keyboard** (the shortcut editor) and **About**. Changes show at once; **Done** keeps them, **Cancel**, × or Esc puts back what was there.
 - **About** has the logo, version, build (commit and date), system, renderer, settings path, the installed Crafting Apps, credits and license, plus *Copy version info*, *Source code* (the GitHub repository), and buttons for the documents, settings and templates folders. Your own templates go in `Templates` next to `home.json` (`~/Library/Application Support/be.Kadee.KadeeStudio/Templates` on macOS). On macOS the menu bar follows ONLYOFFICE's: **KadeeStudio** (About, Check for Updates…, Settings…, Services, Hide, Quit), **File** (New document…, New ▸ every document type, Open…, Close; Save, Save As… and Print… are greyed out until the editors arrive), **Edit** (Undo, Redo, Cut, Copy, Paste, Select All), **Window** and **Help** (Acknowledgments, License Agreement, KadeeStudio Help). Menu items show the shortcuts from your key map: one-key shortcuts such as ⌘O appear, sequences such as ⌘N M do not. About and Acknowledgments open this same page; Check for Updates… opens the project's releases page.
 - First launch creates `~/Documents/KadeeStudio` with *Welcome to KadeeStudio.md*.
@@ -108,7 +128,8 @@ APPLE_NOTARY_PROFILE=kadee-notary ./scripts/build-macos.sh --universal
 
 ```sh
 sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev libx11-dev \
-  libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev     # Debian / Ubuntu
+  libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev \
+  libwebkit2gtk-4.1-dev                                                   # Debian / Ubuntu
 ./scripts/build-linux.sh               # .tar.gz with install.sh, plus .deb / .rpm / AppImage
 ```
 

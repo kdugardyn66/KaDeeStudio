@@ -10,10 +10,11 @@
 #
 # Build dependencies (Debian/Ubuntu):
 #   sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev \
-#        libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev
+#        libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev \
+#        libwebkit2gtk-4.1-dev
 # Fedora:
 #   sudo dnf install gcc pkgconf libxkbcommon-devel wayland-devel libX11-devel \
-#        libXcursor-devel libXrandr-devel libXi-devel mesa-libGL-devel gtk3-devel rpm-build
+#        libXcursor-devel libXrandr-devel libXi-devel mesa-libGL-devel gtk3-devel webkit2gtk4.1-devel rpm-build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -113,7 +114,7 @@ Section: office
 Priority: optional
 Architecture: $DEB_ARCH
 Installed-Size: $SIZE_KB
-Depends: libc6 (>= 2.31), libxkbcommon0, libgtk-3-0
+Depends: libc6 (>= 2.31), libxkbcommon0, libgtk-3-0, libwebkit2gtk-4.1-0
 Recommends: libvulkan1 | libgl1
 Maintainer: Kris Dugardyn <kris.dugardyn@gmail.com>
 Homepage: https://github.com/kdugardyn66/kadeestudio
@@ -137,7 +138,7 @@ Release:        1
 Summary:        Native Rust office suite
 License:        MIT OR Apache-2.0
 URL:            https://github.com/kdugardyn66/kadeestudio
-Requires:       libxkbcommon gtk3
+Requires:       libxkbcommon gtk3 webkit2gtk4.1
 %global debug_package %{nil}
 %global __strip /bin/true
 

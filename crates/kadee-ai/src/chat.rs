@@ -241,6 +241,18 @@ pub fn starred_context(paths: &[PathBuf], budget: usize) -> Option<String> {
     Some(out)
 }
 
+/// Like [`file_context`] for a document whose current text the app already has (an editor's
+/// unsaved text): `name` is shown to the model, `text` is cut at `budget` characters.
+pub fn text_context(name: &str, text: &str, budget: usize) -> String {
+    let take: String = text.chars().take(budget).collect();
+    let cut = take.chars().count() < text.chars().count();
+    format!(
+        "The user has this file open: {name}. Answer questions about it and write content for it. \
+         Write content for it as Markdown that can be inserted into the document as is.\n\n=== {name} ===\n{take}{}\n",
+        if cut { "\n[…cut]" } else { "" }
+    )
+}
+
 /// The instructions that carry the file the user has open: its text when it can be read as is
 /// (up to `budget` characters), otherwise just its name.
 pub fn file_context(path: &std::path::Path, budget: usize) -> Option<String> {
@@ -264,6 +276,13 @@ pub fn file_context(path: &std::path::Path, budget: usize) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_context_cuts_at_the_budget() {
+        let c = text_context("a.md", "abcdef", 3);
+        assert!(c.contains("=== a.md ===\nabc\n[…cut]"));
+        assert!(!text_context("a.md", "abc", 10).contains("[…cut]"));
+    }
 
     #[test]
     fn grouping() {

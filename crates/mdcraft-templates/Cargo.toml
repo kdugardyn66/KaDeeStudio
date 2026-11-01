@@ -1,0 +1,13 @@
+[package]
+name = "mdcraft-templates"
+description = "The Markdown document and slide-deck templates shipped with mdcraft"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[lints.rust]
+unsafe_code = "deny"

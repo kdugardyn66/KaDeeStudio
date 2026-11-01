@@ -46,7 +46,7 @@ pub mod tasks;
 pub mod types;
 
 pub use catalog::{Catalog, Category, ModelInfo};
-pub use chat::{CONTEXT_BUDGET, ChatMessage, ChatState, Speaker, file_context, group, starred_context};
+pub use chat::{CONTEXT_BUDGET, ChatMessage, ChatState, Speaker, file_context, group, starred_context, text_context};
 pub use config::{AiConfig, KeySource, Protocol, ProviderConfig, ProviderKind, Region, Service};
 pub use error::AiError;
 pub use http::Cancel;

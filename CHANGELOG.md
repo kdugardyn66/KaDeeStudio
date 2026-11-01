@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-11-01
+
+Phase 2: Kadee Markdown.
+
+- **Kadee Markdown**: mdcraft's Markdown word processor in the Markdown tab, with all of its functionality — the ribbon (Home, Insert, Design, Slides, Review, View, Table), the editor and live preview with diagrams, charts, maths and media, slides and the F5 slide show, the File view with 19 templates and My templates, export (PDF, web page, formatted text), printing, crash recovery and Options.
+- mdcraft's crates are part of the workspace (`crates/mdcraft-core`, `crates/mdcraft-templates`) **without mdcraft's AI code**: the agent bridge (`agent.rs`, `agent.js`, `--control`) and the MCP server are left out. KaDee AI is the assistant.
+- **KaDee AI and Markdown**: the AI pane of a Markdown tab reads the editor's current text, unsaved edits included, and each answer has *Insert into document* (inserted at the cursor, one undo step).
+- The page's requests are answered by KadeeStudio: Open and Save As dialogs, printing, full screen, closing with unsaved changes (closing a tab or the window asks first). A template or a copy that mdcraft would open in a new window opens in a new tab; Save As moves the tab to the new file.
+- KadeeStudio shortcuts work while the editor has the keyboard (Cmd+W, Ctrl+Tab, Cmd+N, Cmd+J, Cmd+1…9 …); the macOS Edit menu acts on the editor. Menus, the New document menu and Settings show above the editor.
+- The tab shows the document's name with • while it has unsaved changes.
+- New documents and dialogs use the KadeeStudio documents folder; My templates live in KadeeStudio's `Templates` folder; mdcraft's settings in `Markdown` next to `home.json`.
+- Inside the editor the name is Kadee Markdown; About credits mdcraft and MarkDown Live.
+- Linux: needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev` to build, `libwebkit2gtk-4.1-0` to run; added to CI, the release workflow and the .deb/.rpm dependencies). KadeeStudio runs on X11/XWayland so the editor can be embedded (`KADEE_KEEP_WAYLAND=1` keeps native Wayland, without the editor).
+- Windows: Markdown files keep the file tab for now (mdcraft runs on macOS and Linux).
+
 ## 0.2.0 — 2026-11-01
 
 Phase 1: KaDee AI.

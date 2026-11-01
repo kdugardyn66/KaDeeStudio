@@ -65,7 +65,9 @@ pub fn show(app: &mut KadeeApp, ui: &mut Ui, path: &Path) {
             |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
-                let msg = if kind.is_craft() {
+                let msg = if cfg!(windows) && kind.group == kadee_core::DocGroup::Markdown {
+                    "Kadee Markdown runs on macOS and Linux; Windows support follows.".to_string()
+                } else if kind.is_craft() {
                     format!("KadeeStudio hands {} files to {} from Phase {}.", kind.group.label(), kind.app_name(), kind.phase())
                 } else {
                     format!("The {} editor arrives in Phase {}.", kind.app_name(), kind.phase())

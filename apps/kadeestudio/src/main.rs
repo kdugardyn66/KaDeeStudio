@@ -7,12 +7,14 @@ mod app;
 mod icons;
 #[cfg(target_os = "macos")]
 mod mac_menu;
+#[cfg(unix)]
+mod markdown;
 mod ui;
 
 use app::KadeeApp;
 
 impl eframe::App for KadeeApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         #[cfg(target_os = "macos")]
         {
             let actions = match self.mac_menu.as_mut() {
@@ -25,7 +27,16 @@ impl eframe::App for KadeeApp {
             for action in actions {
                 match action {
                     mac_menu::Action::Run(cmd) => self.send(cmd),
-                    mac_menu::Action::Edit(edit) => mac_menu::edit(ui.ctx(), edit),
+                    mac_menu::Action::Edit(edit) => {
+                        // In a Markdown tab the menu acts on the editor, unless an egui field
+                        // (the KaDee AI pane) has the keyboard.
+                        let on_editor = !ui.ctx().egui_wants_keyboard_input()
+                            && self.active > 0
+                            && self.tabs.get(self.active - 1).cloned().is_some_and(|p| self.markdown.edit(&p, edit));
+                        if !on_editor {
+                            mac_menu::edit(ui.ctx(), edit);
+                        }
+                    }
                 }
             }
         }
@@ -35,12 +46,17 @@ impl eframe::App for KadeeApp {
         ui::shortcuts(self, ui.ctx());
         ui::shell(self, ui);
         let ctx = ui.ctx().clone();
+        #[cfg(unix)]
+        markdown::frame(self, &ctx, frame);
+        #[cfg(not(unix))]
+        let _ = frame;
         self.run_queue(&ctx);
         self.persist();
     }
 }
 
 fn main() -> eframe::Result {
+    prepare_markdown();
     #[allow(unused_mut)]
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -56,6 +72,33 @@ fn main() -> eframe::Result {
         options.renderer = eframe::Renderer::Glow;
     }
     eframe::run_native("KadeeStudio", options, Box::new(|cc| Ok(Box::new(KadeeApp::new(cc)))))
+}
+
+/// Kadee Markdown runs mdcraft: its settings, recent files and recovery copies live in
+/// `Markdown` next to `home.json`. On Linux its web view needs X11, so winit and GTK use X11
+/// (XWayland on a Wayland desktop), and WebKitGTK draws without DMA-BUF, which shows a blank
+/// view with some GPU drivers.
+fn prepare_markdown() {
+    #[cfg(unix)]
+    {
+        let dir = kadee_core::Store::platform().dir().join("Markdown");
+        // SAFETY: called first thing in `main`, before any other thread exists.
+        unsafe {
+            if std::env::var_os("MDCRAFT_CONFIG_DIR").is_none() {
+                std::env::set_var("MDCRAFT_CONFIG_DIR", &dir);
+            }
+            #[cfg(target_os = "linux")]
+            {
+                if std::env::var_os("KADEE_KEEP_WAYLAND").is_none() {
+                    std::env::remove_var("WAYLAND_DISPLAY");
+                    std::env::set_var("GDK_BACKEND", "x11");
+                }
+                if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+                    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                }
+            }
+        }
+    }
 }
 
 /// The window/taskbar icon: the KadeeStudio logo (module grid with an AI spark).

@@ -75,6 +75,9 @@ pub struct KadeeApp {
     pub installed: Vec<InstalledApp>,
     /// Crafting App icons, loaded on first use.
     pub craft_icons: crate::ui::craft_icons::CraftIcons,
+    /// Kadee Markdown: mdcraft's editor in each Markdown tab (macOS and Linux).
+    #[cfg(unix)]
+    pub markdown: crate::markdown::Markdown,
     /// macOS menu bar (About KadeeStudio, Settings…).
     #[cfg(target_os = "macos")]
     pub mac_menu: Option<crate::mac_menu::MacMenu>,
@@ -115,6 +118,8 @@ impl KadeeApp {
             ai_ui: Default::default(),
             installed: detect_installed(),
             craft_icons: Default::default(),
+            #[cfg(unix)]
+            markdown: Default::default(),
             #[cfg(target_os = "macos")]
             mac_menu: None,
             dirty: false,
@@ -301,8 +306,12 @@ impl KadeeApp {
     }
 
     pub fn open_tab(&mut self, path: PathBuf) {
-        self.state.library.touch(&path, now());
-        self.mark_dirty();
+        // A document the Markdown editor is about to create has no file yet: it joins Recent
+        // when it is saved.
+        if path.exists() {
+            self.state.library.touch(&path, now());
+            self.mark_dirty();
+        }
         if let Some(i) = self.tabs.iter().position(|p| *p == path) {
             self.active = i + 1;
         } else {
@@ -315,11 +324,44 @@ impl KadeeApp {
         if n == 0 || n > self.tabs.len() {
             return;
         }
+        // A Markdown tab asks about unsaved changes first; its page closes it (`quit`).
+        #[cfg(unix)]
+        if self.markdown.request_close(&self.tabs[n - 1]) {
+            self.active = n;
+            return;
+        }
         let path = self.tabs.remove(n - 1);
-        self.closed.push(path);
+        #[cfg(unix)]
+        self.markdown.forget(&path);
+        if path.exists() {
+            self.closed.push(path);
+        }
         if self.active >= n {
             self.active = self.active.saturating_sub(1).min(self.tabs.len());
         }
+    }
+
+    /// Close the tab of `path` without asking (its editor already did).
+    pub fn remove_tab(&mut self, path: &Path) {
+        if let Some(i) = self.tabs.iter().position(|p| p == path) {
+            let n = i + 1;
+            let path = self.tabs.remove(i);
+            if path.exists() {
+                self.closed.push(path);
+            }
+            if self.active >= n {
+                self.active = self.active.saturating_sub(1).min(self.tabs.len());
+            }
+        }
+    }
+
+    /// The name shown on a file's tab: the Markdown editor's (with • while unsaved), else the file's.
+    pub fn tab_name(&self, path: &Path) -> String {
+        #[cfg(unix)]
+        if let Some(n) = self.markdown.tab_name(path) {
+            return n;
+        }
+        file_name(path)
     }
 
     /// Run every queued command.
