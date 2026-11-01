@@ -279,7 +279,7 @@ mod tests {
     use std::fs;
 
     fn app(name: &str) -> &'static CraftApp {
-        CRAFT_APPS.iter().find(|a| a.name == name).unwrap()
+        CRAFT_APPS.iter().find(|a| a.name.eq_ignore_ascii_case(name)).unwrap()
     }
 
     #[test]
